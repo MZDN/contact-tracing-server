@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/Co-Epi/coepi-backend-go/backend"
-	"github.com/Co-Epi/coepi-backend-go/server"
+	"github.com/wolkdb/cen-server/backend"
+	"github.com/wolkdb/cen-server/server"
 )
 
 const (
