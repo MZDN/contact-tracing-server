@@ -7,11 +7,12 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/Co-Epi/coepi-backend-go/backend"
-	"github.com/Co-Epi/coepi-backend-go/server"
+	"github.com/wolkdb/cen-server/backend"
+	"github.com/wolkdb/cen-server/server"
 )
 
 // DefaultTransport contains all HTTP client operation parameters
@@ -82,7 +83,10 @@ func httpget(url string) (result []byte, err error) {
 }
 
 func TestCENSimple(t *testing.T) {
-	endpoint := fmt.Sprintf("coepi.wolk.com:%d", server.DefaultPort)
+	hostname, err := os.Hostname()
+	if err != nil{
+	}
+	endpoint := fmt.Sprintf("%s.wolk.com:%d", hostname, server.DefaultPort)
 
 	// Post CENReport to /cenreport, along with CENKeys
 	cenReport, cenReportKeys := backend.GetSampleCENReportAndCENKeys(2)
