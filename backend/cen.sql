@@ -12,8 +12,9 @@ CREATE TABLE `CENKeys` (
    KEY (`cenKey`)
 );
 
-/* reportID is not uniq. */
-
+/*
+reportID is not uniq. 
+*/
 CREATE TABLE `CENReport_M` (
    `reportID` varchar(64) DEFAULT "",
    `symptomID` int,
@@ -30,21 +31,22 @@ symptomID 	symptom
 3		Muscle aches
 ....
 */
+
 CREATE TABLE `CENSymptom` (
    `symptomID` int,
-   `symptom` varchar(32) DEFAULT ""
+   `symptom` varchar(32) DEFAULT "",
    `reportMimeType` varchar(64) DEFAULT "",
-   `reportTS` int
-   PRIMARY KEY (`symptomID`)
+   `reportTS` int, 
+   PRIMARY KEY (`symptomID`),
    KEY (`reportTS`)
 );
 
 /* not overwrite status. you can trace the status by CENKeys' reportTS */
 CREATE TABLE `CENStatus` (
-   `reportID` varchar(64) DEFAULT ""
+   `reportID` varchar(64) DEFAULT "",
    `statusID` int,
    PRIMARY KEY(`statusID`)
-)
+);
 
 /* 
 statusID	status
@@ -55,7 +57,7 @@ statusID	status
 */
 CREATE TABLE `CENStatyeType` (
    `statusID`  int,
-   `status` varchar(32)
+   `status` varchar(32),
    PRIMARY KEY(`statusID`)
 );
 
