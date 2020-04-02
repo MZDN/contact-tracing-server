@@ -1,6 +1,5 @@
 FROM google/cloud-sdk:latest
-COPY . /cen
-RUN make /cen
-
+Add . /go/src/cen
+COPY bin/cen /
 ENV PORT 8080
-CMD ["/cen/bin/cen"]
+CMD ["./cen"]
