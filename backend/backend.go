@@ -239,7 +239,7 @@ func (backend *Backend) ProcessGetCENKeys(timestamp uint64) (cenKeys []string, e
 func (backend *Backend) ProcessGetCENReport(cenKey string) (reports []*CENReport, err error) {
 	reports = make([]*CENReport, 0)
 
-	s := fmt.Sprintf("select CENKeys.reportID, symptomID, reportMimeType, CENReport.reportTS From CENKeys, CENReport where CENKeys.CENKey = ? and CENKeys.reportID = CENReport.reportID")
+	s := fmt.Sprintf("select CENKeys.reportID, Report, reportMimeType, CENReport.reportTS From CENKeys, CENReport where CENKeys.CENKey = ? and CENKeys.reportID = CENReport.reportID")
 	stmt, err := backend.db.Prepare(s)
 	if err != nil {
 		return reports, err
