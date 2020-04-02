@@ -18,9 +18,6 @@ const (
 
 	// TableCENKeys stores the mapping between CENKeys and CENReports.
 	TableCENReport = "CENReport"
-
-	// Default Conn String [change this to your server]
-	DefaultConnString = "root:1wasb0rn2!@tcp(34.83.154.244)/wolk?charset=utf8"
 )
 
 // Backend holds a client to connect  to the BigTable backend
