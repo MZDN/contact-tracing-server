@@ -16,10 +16,11 @@ func main() {
 	port := flag.Uint("port", uint(server.DefaultPort), "port cen is listening on")
 	mysqlConnectionString := flag.String("conn", backend.DefaultConnString, "MySQL Connection String")
 
-	_, err := server.NewServer(uint16(*port), *mysqlConnectionString)
+	s, err := server.NewServer(uint16(*port), *mysqlConnectionString)
 	if err != nil {
 		panic(err)
 	}
+	s.Start()
 	fmt.Printf("CEN Server v%s - Listening on port %d...\n", version, *port)
 	for {
 	}

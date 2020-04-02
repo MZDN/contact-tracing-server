@@ -1,13 +1,15 @@
 package server
 
 import (
-	"crypto/tls"
-	"crypto/x509"
+	//"crypto/tls"
+	//"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
-	"path"
+	"os"
+	//"path"
 	"strconv"
 	"strings"
 	"time"
@@ -52,12 +54,12 @@ func NewServer(httpPort uint16, connString string) (s *Server, err error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.getConnection)
 	s.Handler = mux
-	go s.Start()
 	return s, nil
 }
 
 func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	fmt.Println("getConnection")
 	if strings.Contains(r.URL.Path, EndpointCENReport) {
 		if r.Method == http.MethodPost {
 			s.postCENReportHandler(w, r)
@@ -73,38 +75,51 @@ func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 
 // Start kicks off the HTTP Server
 func (s *Server) Start() (err error) {
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.HTTPPort),
-		Handler:      s.Handler,
-		ReadTimeout:  600 * time.Second,
-		WriteTimeout: 600 * time.Second,
+	/*
+		srv := &http.Server{
+			Addr:         fmt.Sprintf(":%d", s.HTTPPort),
+			Handler:      s.Handler,
+			ReadTimeout:  600 * time.Second,
+			WriteTimeout: 600 * time.Second,
+		}
+	*/
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	SSLKeyFile := path.Join(sslBaseDir, sslKeyFileName)
-	CAFile := path.Join(sslBaseDir, caFileName)
+	// start the web server on port and accept requests
+	log.Printf("Server listening on port %s", port)
+	log.Fatal(http.ListenAndServe(":"+port, s.Handler))
 
-	// Note: bringing the intermediate certs with CAFile into a cert pool and the tls.Config is *necessary*
-	certpool := x509.NewCertPool() // https://stackoverflow.com/questions/26719970/issues-with-tls-connection-in-golang -- instead of x509.NewCertPool()
-	pem, err := ioutil.ReadFile(CAFile)
-	if err != nil {
-		return fmt.Errorf("Failed to read client certificate authority: %v", err)
-	}
-	if !certpool.AppendCertsFromPEM(pem) {
-		return fmt.Errorf("Can't parse client certificate authority")
-	}
+	/*
+		SSLKeyFile := path.Join(sslBaseDir, sslKeyFileName)
+		CAFile := path.Join(sslBaseDir, caFileName)
 
-	config := tls.Config{
-		ClientCAs:  certpool,
-		ClientAuth: tls.NoClientCert, // tls.RequireAndVerifyClientCert,
-	}
-	config.BuildNameToCertificate()
+		// Note: bringing the intermediate certs with CAFile into a cert pool and the tls.Config is *necessary*
+		certpool := x509.NewCertPool() // https://stackoverflow.com/questions/26719970/issues-with-tls-connection-in-golang -- instead of x509.NewCertPool()
+		pem, err := ioutil.ReadFile(CAFile)
+		if err != nil {
+			return fmt.Errorf("Failed to read client certificate authority: %v", err)
+		}
+		if !certpool.AppendCertsFromPEM(pem) {
+			return fmt.Errorf("Can't parse client certificate authority")
+		}
 
-	srv.TLSConfig = &config
+		config := tls.Config{
+			ClientCAs:  certpool,
+			ClientAuth: tls.NoClientCert, // tls.RequireAndVerifyClientCert,
+		}
+		config.BuildNameToCertificate()
 
-	err = srv.ListenAndServeTLS(CAFile, SSLKeyFile)
-	if err != nil {
-		return err
-	}
+		srv.TLSConfig = &config
+
+		err = srv.ListenAndServeS(CAFile, SSLKeyFile)
+		if err != nil {
+			return err
+		}
+	*/
 	return nil
 }
 
