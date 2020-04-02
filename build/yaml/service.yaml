@@ -10,3 +10,4 @@ spec:
       port: 443
       targetPort: 8080
   type: LoadBalancer
+  loadBalancerIP: "35.230.32.125"
