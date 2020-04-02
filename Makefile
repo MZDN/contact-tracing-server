@@ -37,46 +37,34 @@ deletecluster:
 	-gcloud container clusters delete $(CLUSTER) --zone $(ZONE) --project $(PROJECT) --quiet
 
 createpvcs:
-	for i in `seq 0 $(LAST)` ; do \
-	  kubectl create -f ./build/yaml/w$$i-$(STAGE)-pvc.yml --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER); \
-        done
+	kubectl apply -f ./build/yaml/pvc.yaml
 
 getpvcs:
-	kubectl get pvc --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER)
+	kubectl get pvc cen
 
 deletepvcs:
-	for i in `seq 0 $(LAST)` ; do \
-	  kubectl delete -f ./build/yaml/w$$i-$(STAGE)-pvc.yml --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER); \
-	done
+	kubectl delete pvc cen
 
 createservices:
-	for i in `seq 0 $(LAST)` ; do \
-	  kubectl create -f ./build/yaml/w$$i-$(STAGE)-service.yml --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER); \
-	done
+	kubectl apply -f ./build/yaml/service.yaml
 
 getservices:
-	kubectl get services --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER)
+	kubectl get services cen
 
 deleteservices:
-	for i in `seq 0 $(LAST)` ; do \
-	  kubectl delete -f ./build/yaml/w$$i-$(STAGE)-service.yml --kubeconfig=/root/.kube/$(CLUSTER); \
-	done
+	kubectl delete service cen
 
 createpods:
-	for i in `seq 0 $(LAST)` ; do \
-	  kubectl create -f ./build/yaml/w$$i-$(STAGE)-cloudstore.yml --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER); \
-	done
+	kubectl apply -f ./build/yaml/deploy.yaml
 
 getpods:
-	kubectl get pods --namespace=$(NAMESPACE)  --kubeconfig=/root/.kube/$(CLUSTER)
+	kubectl get pods
 
 getpod:
-	kubectl describe pod $(POD) --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER)
+	kubectl describe pod cen
 
 deletepods:
-	for i in `seq 0 $(LAST)` ; do \
-	  kubectl delete -f ./build/yaml/w$$i-$(STAGE)-cloudstore.yml --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER); \
-	done
+	kubectl delete deployment cen
 
 restartpod:
 	kubectl delete -f ./build/yaml/$(POD)-cloudstore.yml --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER)
@@ -87,7 +75,7 @@ pods:
 	make createpods
 
 sshpod:
-	kubectl exec --kubeconfig=/root/.kube/$(CLUSTER) --namespace=$(NAMESPACE) -it `kubectl get pods --namespace=$(NAMESPACE)  --kubeconfig=/root/.kube/$(CLUSTER) | grep $(POD) | awk '{print $$1}'` -- bash
+	kubectl exec -it `kubectl get pods | grep cen | awk '{print $$1}'` -- bash
 
 createips:
 	# get the ips from google

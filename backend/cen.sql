@@ -1,8 +1,12 @@
-DROP TABLE IF EXISTS CENKeys;
-DROP TABLE IF EXISTS CENReport;
+DROP TABLE IF EXISTS CENKeys_M;
+DROP TABLE IF EXISTS CENReport_M;
+DROP TABLE IF EXISTS CENSymptom;
+DROP TABLE IF EXISTS CENSymptomType;
+DROP TABLE IF EXISTS CENStatus;
+DROP TABLE IF EXISTS CENStatusType;
 
 -- reportID is uniq per entire record or per user?
-CREATE TABLE `CENKeys` (
+CREATE TABLE `CENKeys_M` (
    `cenKey`   varchar(32) DEFAULT "", 
    `reportID` varchar(64) DEFAULT "",
    `reportTS` int,
@@ -12,10 +16,16 @@ CREATE TABLE `CENKeys` (
    KEY (`cenKey`)
 );
 
-/*
-reportID is not uniq. 
-*/
 CREATE TABLE `CENReport_M` (
+   `reportID` varchar(64) DEFAULT "",
+   `report`     varchar(4000) DEFAULT "",
+   `reportMimeType` varchar(64) DEFAULT "",
+   `reportTS` int,
+   PRIMARY KEY (`reportID`),
+   KEY (`reportTS`)
+);
+
+CREATE TABLE `CENSymptom` (
    `reportID` varchar(64) DEFAULT "",
    `symptomID` int,
    `reportMimeType` varchar(64) DEFAULT "",
@@ -32,7 +42,7 @@ symptomID 	symptom
 ....
 */
 
-CREATE TABLE `CENSymptom` (
+CREATE TABLE `CENSymptomType` (
    `symptomID` int,
    `symptom` varchar(32) DEFAULT "",
    `reportMimeType` varchar(64) DEFAULT "",
