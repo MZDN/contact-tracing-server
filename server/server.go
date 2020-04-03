@@ -88,12 +88,6 @@ func (s *Server) Start() (err error) {
 		port = "8080"
 	}
 
-	/*
-		// start the web server on port and accept requests
-		log.Printf("Server listening on port %s", port)
-		log.Fatal(http.ListenAndServe(":"+port, s.Handler))
-	*/
-
 	ssldir := os.Getenv("SSLDIR")
 	if ssldir == "" {
 		ssldir = sslBaseDir
@@ -106,7 +100,6 @@ func (s *Server) Start() (err error) {
 	certpool := x509.NewCertPool() // https://stackoverflow.com/questions/26719970/issues-with-tls-connection-in-golang -- instead of x509.NewCertPool()
 	log.Printf("certpool %v\n", certpool)
 	pem, err := ioutil.ReadFile(CAFile)
-	log.Printf("ReadFile %s %v\n", string(pem), err)
 	if err != nil {
 		log.Printf("Failed to read client certificate authority: %v", err)
 		return fmt.Errorf("Failed to read client certificate authority: %v", err)
@@ -216,5 +209,5 @@ func (s *Server) getCENKeysHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("CEN API Server v0.2"))
+	w.Write([]byte("CEN API Server v0.2.1"))
 }
