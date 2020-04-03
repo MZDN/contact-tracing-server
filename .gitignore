@@ -3,3 +3,4 @@ certs/*
 conf/*
 .gitsecret/keys/random_seed
 !*.secret
+test
