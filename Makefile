@@ -8,7 +8,7 @@ cen:
 		@echo "Done building cen.  Run \"$(GOBIN)/cen\" to launch cen."
 
 docker: 
-	docker build --force-rm -t gcr.io/us-west1-wlk/wolkinc/cen-mm build
+	docker build --force-rm -t gcr.io/us-west1-wlk/wolkinc/cen-mm .
 	gcloud docker -- push gcr.io/us-west1-wlk/wolkinc/cen-mm:latest
 
 createcluster:
