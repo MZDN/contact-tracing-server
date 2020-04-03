@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	//"fmt"
+	"log"
+	"os"
 
 	"github.com/wolkdb/cen-server/backend"
 	"github.com/wolkdb/cen-server/server"
@@ -13,14 +15,18 @@ const (
 )
 
 func main() {
-	port := flag.Uint("port", uint(server.DefaultPort), "port cen is listening on")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = server.DefaultPort
+	}
 	mysqlConnectionString := flag.String("conn", backend.DefaultConnString, "MySQL Connection String")
 
-	_, err := server.NewServer(uint16(*port), *mysqlConnectionString)
+	s, err := server.NewServer(port, *mysqlConnectionString)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("CEN Server v%s - Listening on port %d...\n", version, *port)
+	s.Start()
+	log.Printf("CEN Server v%s - Listening on port %s...\n", version, port)
 	for {
 	}
 }

@@ -18,9 +18,6 @@ const (
 
 	// TableCENKeys stores the mapping between CENKeys and CENReports.
 	TableCENReport = "CENReport"
-
-	// Default Conn String [change this to your server]
-	DefaultConnString = "root:1wasb0rn2!@tcp(34.83.154.244)/wolk?charset=utf8"
 )
 
 // Backend holds a client to connect  to the BigTable backend
@@ -32,6 +29,22 @@ type Backend struct {
 type CENReport struct {
 	ReportID        string `json:"reportID,omitempty"`
 	Report          []byte `json:"report,omitempty"`  // this is expected to be a JSON blob but the server doesn't need to parse it
+	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
+	ReportMimeType  string `json:"reportMimeType,omitempty"`
+	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
+}
+
+type CENSymptom struct {
+	ReportID        string `json:"reportID,omitempty"`
+	Symptoms        []int  `json:"symptoms,omitempty"`
+	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
+	ReportMimeType  string `json:"reportMimeType,omitempty"`
+	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
+}
+
+type CENStatus struct {
+	ReportID        string `json:"reportID,omitempty"`
+	StatusID        int    `json:"statusID,omitempty"`
 	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
 	ReportMimeType  string `json:"reportMimeType,omitempty"`
 	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
@@ -96,6 +109,101 @@ func (backend *Backend) ProcessCENReport(cenReport *CENReport) (err error) {
 	return nil
 }
 
+// ProcessCENReport manages the API Endpoint to POST /cenreport
+//  Input: CENReport
+//  Output: error
+//  Behavior: write report bytes to "report" table; write row for each CENKey with reportID
+func (backend *Backend) ProcessCENSymptom(cenSymptom *CENSymptom) (err error) {
+	// need to change Report's hash
+	reportData, err := json.Marshal(cenSymptom)
+	if err != nil {
+		return err
+	}
+
+	// put the CENReport in CENKeys table
+	sKeys := "insert into CENKeys_M (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
+	stmtKeys, err := backend.db.Prepare(sKeys)
+	if err != nil {
+		return err
+	}
+
+	// put the CENReport in CENReport table
+	sReport := "insert into CENSymptom (reportID, symptomID, reportMimeType, reportTS) values ( ?, ?, ?, ?) "
+	stmtReport, err := backend.db.Prepare(sReport)
+	if err != nil {
+		return err
+	}
+
+	curTS := uint64(time.Now().Unix())
+	reportID := fmt.Sprintf("%x", Computehash(reportData))
+	cenKeys := strings.Split(cenSymptom.CENKeys, ",")
+	// store the cenreportID in cenkeys table, one row per key
+	for _, cenKey := range cenKeys {
+		cenKey := strings.Trim(cenKey, " \n")
+		if len(cenKey) > 30 && len(cenKey) <= 32 {
+			_, err = stmtKeys.Exec(cenKey, reportID, curTS)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// store the cenreportID in cenReport table, one row per key
+	for _, symptomid := range cenSymptom.Symptoms {
+		_, err = stmtReport.Exec(reportID, symptomid, cenSymptom.ReportMimeType, curTS)
+		if err != nil {
+			panic(5)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (backend *Backend) ProcessCENStatus(cenStatus *CENStatus) (err error) {
+	statusData, err := json.Marshal(cenStatus)
+	if err != nil {
+		return err
+	}
+
+	// put the CENReport in CENKeys table
+	sKeys := "insert into CENKeys (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
+	stmtKeys, err := backend.db.Prepare(sKeys)
+	if err != nil {
+		return err
+	}
+
+	// put the CENReport in CENReport table
+	sReport := "insert into CENStatus (reportID, statusID, reportMimeType, reportTS) values ( ?, ?, ?, ?) "
+	stmtReport, err := backend.db.Prepare(sReport)
+	if err != nil {
+		return err
+	}
+
+	curTS := uint64(time.Now().Unix())
+	reportID := fmt.Sprintf("%x", Computehash(statusData))
+	cenKeys := strings.Split(cenStatus.CENKeys, ",")
+	// store the cenreportID in cenkeys table, one row per key
+	for _, cenKey := range cenKeys {
+		cenKey := strings.Trim(cenKey, " \n")
+		if len(cenKey) > 30 && len(cenKey) <= 32 {
+			_, err = stmtKeys.Exec(cenKey, reportID, curTS)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// store the cenreportID in cenReport table, one row per key
+	_, err = stmtReport.Exec(reportID, cenStatus.StatusID, cenStatus.ReportMimeType, curTS)
+	if err != nil {
+		panic(5)
+		return err
+	}
+
+	return nil
+}
+
 // ProcessGetCENKeys manages the GET API endpoint /cenkeys
 //  Input: timestamp
 //  Output: array of CENKeys (in string form) for the last hour
@@ -128,7 +236,7 @@ func (backend *Backend) ProcessGetCENKeys(timestamp uint64) (cenKeys []string, e
 func (backend *Backend) ProcessGetCENReport(cenKey string) (reports []*CENReport, err error) {
 	reports = make([]*CENReport, 0)
 
-	s := fmt.Sprintf("select CENKeys.reportID, report, reportMimeType, CENReport.reportTS From CENKeys, CENReport where CENKeys.CENKey = ? and CENKeys.reportID = CENReport.reportID")
+	s := fmt.Sprintf("select CENKeys.reportID, Report, reportMimeType, CENReport.reportTS From CENKeys, CENReport where CENKeys.CENKey = ? and CENKeys.reportID = CENReport.reportID")
 	stmt, err := backend.db.Prepare(s)
 	if err != nil {
 		return reports, err
@@ -179,4 +287,32 @@ func GetSampleCENReportAndCENKeys(nKeys int) (cenReport *CENReport, cenKeys []st
 	cenReport.Report = []byte("severe fever,coughing,hard to breathe")
 	cenReport.CENKeys = CENKeys
 	return cenReport, cenKeys
+}
+
+// GetSampleCENReportAndCENKeys generates a CENReport and an array of CENKeys (in string form)
+func GetSampleCENSymptomAndCENKeys(nKeys int) (cenSymptom *CENSymptom, cenKeys []string) {
+	cenKeys = make([]string, nKeys)
+	for i := 0; i < nKeys; i++ {
+		cenKeys[i] = makeCENKeyString()
+	}
+	CENKeys := fmt.Sprintf("%s,%s", cenKeys[0], cenKeys[1])
+	cenSymptom = new(CENSymptom)
+	cenSymptom.ReportID = "1"
+	cenSymptom.Symptoms = []int{1, 2, 4, 5, 7}
+	cenSymptom.CENKeys = CENKeys
+	return cenSymptom, cenKeys
+}
+
+// GetSampleCENReportAndCENKeys generates a CENReport and an array of CENKeys (in string form)
+func GetSampleCENStatusAndCENKeys(nKeys int) (cenStatus *CENStatus, cenKeys []string) {
+	cenKeys = make([]string, nKeys)
+	for i := 0; i < nKeys; i++ {
+		cenKeys[i] = makeCENKeyString()
+	}
+	CENKeys := fmt.Sprintf("%s,%s", cenKeys[0], cenKeys[1])
+	cenStatus = new(CENStatus)
+	cenStatus.ReportID = "1"
+	cenStatus.StatusID = 1
+	cenStatus.CENKeys = CENKeys
+	return cenStatus, cenKeys
 }

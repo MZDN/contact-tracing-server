@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -22,7 +24,7 @@ const (
 	caFileName     = "www.wolk.com.bundle"
 
 	// DefaultPort is the port which the CEN HTTP server is listening in on
-	DefaultPort = 8080
+	DefaultPort = "8080"
 
 	// EndpointCENReport is the name of the HTTP endpoint for GET/POST of CENReport
 	EndpointCENReport = "cenreport"
@@ -35,16 +37,17 @@ const (
 type Server struct {
 	backend  *backend.Backend
 	Handler  http.Handler
-	HTTPPort uint16
+	HTTPPort string
 }
 
 // NewServer returns an HTTP Server to handle simple-api-process-flow https://github.com/Co-Epi/data-models/blob/master/simple-api-process-flow.md
-func NewServer(httpPort uint16, connString string) (s *Server, err error) {
+func NewServer(httpPort string, connString string) (s *Server, err error) {
 	s = &Server{
 		HTTPPort: httpPort,
 	}
 	backend, err := backend.NewBackend(connString)
 	if err != nil {
+		log.Printf("backend error %v", err)
 		return s, err
 	}
 	s.backend = backend
@@ -52,12 +55,12 @@ func NewServer(httpPort uint16, connString string) (s *Server, err error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.getConnection)
 	s.Handler = mux
-	go s.Start()
 	return s, nil
 }
 
 func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	log.Println("getConnection")
 	if strings.Contains(r.URL.Path, EndpointCENReport) {
 		if r.Method == http.MethodPost {
 			s.postCENReportHandler(w, r)
@@ -74,22 +77,42 @@ func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 // Start kicks off the HTTP Server
 func (s *Server) Start() (err error) {
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", s.HTTPPort),
+		Addr:         ":" + s.HTTPPort,
 		Handler:      s.Handler,
 		ReadTimeout:  600 * time.Second,
 		WriteTimeout: 600 * time.Second,
 	}
 
-	SSLKeyFile := path.Join(sslBaseDir, sslKeyFileName)
-	CAFile := path.Join(sslBaseDir, caFileName)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	/*
+		// start the web server on port and accept requests
+		log.Printf("Server listening on port %s", port)
+		log.Fatal(http.ListenAndServe(":"+port, s.Handler))
+	*/
+
+	ssldir := os.Getenv("SSLDIR")
+	if ssldir == "" {
+		ssldir = sslBaseDir
+	}
+	SSLKeyFile := path.Join(ssldir, sslKeyFileName)
+	CAFile := path.Join(ssldir, caFileName)
+	log.Printf("SSLKeyFile = %s CAFile = %s", SSLKeyFile, CAFile)
 
 	// Note: bringing the intermediate certs with CAFile into a cert pool and the tls.Config is *necessary*
 	certpool := x509.NewCertPool() // https://stackoverflow.com/questions/26719970/issues-with-tls-connection-in-golang -- instead of x509.NewCertPool()
+	log.Printf("certpool %v\n", certpool)
 	pem, err := ioutil.ReadFile(CAFile)
+	log.Printf("ReadFile %s %v\n", string(pem), err)
 	if err != nil {
+		log.Printf("Failed to read client certificate authority: %v", err)
 		return fmt.Errorf("Failed to read client certificate authority: %v", err)
 	}
 	if !certpool.AppendCertsFromPEM(pem) {
+		log.Printf("Can't parse client certificate authority")
 		return fmt.Errorf("Can't parse client certificate authority")
 	}
 
@@ -98,13 +121,17 @@ func (s *Server) Start() (err error) {
 		ClientAuth: tls.NoClientCert, // tls.RequireAndVerifyClientCert,
 	}
 	config.BuildNameToCertificate()
+	log.Printf("tls config ok %v\n", config)
 
 	srv.TLSConfig = &config
 
 	err = srv.ListenAndServeTLS(CAFile, SSLKeyFile)
+	log.Printf("Server listening on port %s %v", s.HTTPPort, err)
 	if err != nil {
+		log.Printf("ListenAndServeTLS err %v", err)
 		return err
 	}
+	log.Printf("Server listening on port %s", s.HTTPPort)
 	return nil
 }
 
