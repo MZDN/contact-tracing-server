@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -32,6 +33,16 @@ type CENReport struct {
 	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
 	ReportMimeType  string `json:"reportMimeType,omitempty"`
 	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
+	StoredTimeStamp uint64 `json:"storedTimeStamp,omitempty"`
+}
+
+type CENReportMeta struct {
+	Report         [][]byte `json:"report,omitempty"`
+	ReportMetaData string   `json:"reportMetaData,omitempty"`
+	L              string   `json:"l,omitempty"`
+	key            string   `json:"key,omitempty"`
+	j              int      `json:"j,omitempty"`
+	jMax           int      `json:"jMax,omitempty"`
 }
 
 type CENSymptom struct {
@@ -40,6 +51,7 @@ type CENSymptom struct {
 	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
 	ReportMimeType  string `json:"reportMimeType,omitempty"`
 	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
+	StoredTimeStamp uint64 `json:"storedTimeStamp,omitempty"`
 }
 
 type CENStatus struct {
@@ -48,6 +60,7 @@ type CENStatus struct {
 	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
 	ReportMimeType  string `json:"reportMimeType,omitempty"`
 	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
+	StoredTimeStamp uint64 `json:"storedTimeStamp,omitempty"`
 }
 
 // NewBackend sets up a client connection to BigTable to manage incoming payloads
@@ -66,20 +79,24 @@ func NewBackend(mysqlConnectionString string) (backend *Backend, err error) {
 //  Output: error
 //  Behavior: write report bytes to "report" table; write row for each CENKey with reportID
 func (backend *Backend) ProcessCENReport(cenReport *CENReport) (err error) {
+	log.Println("ProcessCENReport 1")
 	reportData, err := json.Marshal(cenReport)
 	if err != nil {
 		return err
 	}
+	log.Println("ProcessCENReport 2")
 
-	// put the CENReport in CENKeys table
-	sKeys := "insert into CENKeys (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
-	stmtKeys, err := backend.db.Prepare(sKeys)
-	if err != nil {
-		return err
-	}
+	/*
+		// put the CENReport in CENKeys table
+		sKeys := "insert into CENKeys (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
+		stmtKeys, err := backend.db.Prepare(sKeys)
+		if err != nil {
+			return err
+		}
+	*/
 
 	// put the CENReport in CENReport table
-	sReport := "insert into CENReport (reportID, report, reportMimeType, reportTS) values ( ?, ?, ?, ? ) on duplicate key update report = values(report)"
+	sReport := "insert into CENReport (reportID, report, reportMimeType, reportTS, storeTS) values ( ?, ?, ?, ?, ? ) on duplicate key update report = values(report)"
 	stmtReport, err := backend.db.Prepare(sReport)
 	if err != nil {
 		return err
@@ -87,24 +104,45 @@ func (backend *Backend) ProcessCENReport(cenReport *CENReport) (err error) {
 
 	curTS := uint64(time.Now().Unix())
 	reportID := fmt.Sprintf("%x", Computehash(reportData))
-	cenKeys := strings.Split(cenReport.CENKeys, ",")
 	// store the cenreportID in cenkeys table, one row per key
-	for _, cenKey := range cenKeys {
-		cenKey := strings.Trim(cenKey, " \n")
-		if len(cenKey) > 30 && len(cenKey) <= 32 {
-			_, err = stmtKeys.Exec(cenKey, reportID, curTS)
-			if err != nil {
-				return err
+	/*
+		for _, cenKey := range cenKeys {
+			cenKey := strings.Trim(cenKey, " \n")
+			if len(cenKey) > 30 && len(cenKey) <= 32 {
+				_, err = stmtKeys.Exec(cenKey, reportID, curTS)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	}
+	*/
 
 	// store the cenreportID in cenReport table, one row per key
-	_, err = stmtReport.Exec(reportID, cenReport.Report, cenReport.ReportMimeType, curTS)
+	log.Println("ProcessCENReport 3")
+	_, err = stmtReport.Exec(reportID, cenReport.Report, cenReport.ReportMimeType, cenReport.ReportTimeStamp, curTS)
 	if err != nil {
 		panic(5)
 		return err
 	}
+	log.Println("ProcessCENReport 4")
+
+	symptom := new(CENSymptom)
+	symptom.ReportID = reportID
+	symptom.ReportMimeType = cenReport.ReportMimeType
+	symptom.ReportTimeStamp = cenReport.ReportTimeStamp
+	symptom.StoredTimeStamp = curTS
+	symptom.Symptoms, _ = backend.getSymptoms(cenReport.Report)
+	backend.ProcessCENSymptom(symptom)
+	log.Println("ProcessCENReport 5")
+
+	log.Println("call status")
+	status := new(CENStatus)
+	status.ReportID = cenReport.ReportID
+	status.ReportMimeType = cenReport.ReportMimeType
+	status.ReportTimeStamp = cenReport.ReportTimeStamp
+	status.StoredTimeStamp = curTS
+	status.StatusID, _ = backend.getStatusID(cenReport.Report)
+	backend.ProcessCENStatus(status)
 
 	return nil
 }
@@ -114,43 +152,50 @@ func (backend *Backend) ProcessCENReport(cenReport *CENReport) (err error) {
 //  Output: error
 //  Behavior: write report bytes to "report" table; write row for each CENKey with reportID
 func (backend *Backend) ProcessCENSymptom(cenSymptom *CENSymptom) (err error) {
-	// need to change Report's hash
-	reportData, err := json.Marshal(cenSymptom)
-	if err != nil {
-		return err
+	if cenSymptom.ReportID == "" {
+		symptomData, err := json.Marshal(cenSymptom)
+		if err != nil {
+			return err
+		}
+		cenSymptom.ReportID = fmt.Sprintf("%x", Computehash(symptomData))
 	}
 
-	// put the CENReport in CENKeys table
-	sKeys := "insert into CENKeys_M (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
-	stmtKeys, err := backend.db.Prepare(sKeys)
-	if err != nil {
-		return err
-	}
+	/*
+		// put the CENReport in CENKeys table
+		sKeys := "insert into CENKeys (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
+		stmtKeys, err := backend.db.Prepare(sKeys)
+		if err != nil {
+			return err
+		}
+	*/
 
 	// put the CENReport in CENReport table
-	sReport := "insert into CENSymptom (reportID, symptomID, reportMimeType, reportTS) values ( ?, ?, ?, ?) "
+	sReport := "insert into CENSymptom (reportID, symptomID, reportMimeType, reportTS, storeTS) values ( ?, ?, ?, ?, ?) "
 	stmtReport, err := backend.db.Prepare(sReport)
 	if err != nil {
 		return err
 	}
 
-	curTS := uint64(time.Now().Unix())
-	reportID := fmt.Sprintf("%x", Computehash(reportData))
-	cenKeys := strings.Split(cenSymptom.CENKeys, ",")
-	// store the cenreportID in cenkeys table, one row per key
-	for _, cenKey := range cenKeys {
-		cenKey := strings.Trim(cenKey, " \n")
-		if len(cenKey) > 30 && len(cenKey) <= 32 {
-			_, err = stmtKeys.Exec(cenKey, reportID, curTS)
-			if err != nil {
-				return err
+	/*
+		cenKeys := strings.Split(cenSymptom.CENKeys, ",")
+		// store the cenreportID in cenkeys table, one row per key
+		for _, cenKey := range cenKeys {
+			cenKey := strings.Trim(cenKey, " \n")
+			if len(cenKey) > 30 && len(cenKey) <= 32 {
+				_, err = stmtKeys.Exec(cenKey, reportID, curTS)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	}
+	*/
 
 	// store the cenreportID in cenReport table, one row per key
+	if cenSymptom.StoredTimeStamp == 0 {
+		cenSymptom.StoredTimeStamp = uint64(time.Now().Unix())
+	}
 	for _, symptomid := range cenSymptom.Symptoms {
-		_, err = stmtReport.Exec(reportID, symptomid, cenSymptom.ReportMimeType, curTS)
+		_, err = stmtReport.Exec(cenSymptom.ReportID, symptomid, cenSymptom.ReportMimeType, cenSymptom.ReportTimeStamp, cenSymptom.StoredTimeStamp)
 		if err != nil {
 			panic(5)
 			return err
@@ -161,17 +206,22 @@ func (backend *Backend) ProcessCENSymptom(cenSymptom *CENSymptom) (err error) {
 }
 
 func (backend *Backend) ProcessCENStatus(cenStatus *CENStatus) (err error) {
-	statusData, err := json.Marshal(cenStatus)
-	if err != nil {
-		return err
+	if cenStatus.ReportID == "" {
+		statusData, err := json.Marshal(cenStatus)
+		if err != nil {
+			return err
+		}
+		cenStatus.ReportID = fmt.Sprintf("%x", Computehash(statusData))
 	}
 
-	// put the CENReport in CENKeys table
-	sKeys := "insert into CENKeys (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
-	stmtKeys, err := backend.db.Prepare(sKeys)
-	if err != nil {
-		return err
-	}
+	/*
+		// put the CENReport in CENKeys table
+		sKeys := "insert into CENKeys (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
+		stmtKeys, err := backend.db.Prepare(sKeys)
+		if err != nil {
+			return err
+		}
+	*/
 
 	// put the CENReport in CENReport table
 	sReport := "insert into CENStatus (reportID, statusID, reportMimeType, reportTS) values ( ?, ?, ?, ?) "
@@ -180,22 +230,26 @@ func (backend *Backend) ProcessCENStatus(cenStatus *CENStatus) (err error) {
 		return err
 	}
 
-	curTS := uint64(time.Now().Unix())
-	reportID := fmt.Sprintf("%x", Computehash(statusData))
-	cenKeys := strings.Split(cenStatus.CENKeys, ",")
-	// store the cenreportID in cenkeys table, one row per key
-	for _, cenKey := range cenKeys {
-		cenKey := strings.Trim(cenKey, " \n")
-		if len(cenKey) > 30 && len(cenKey) <= 32 {
-			_, err = stmtKeys.Exec(cenKey, reportID, curTS)
-			if err != nil {
-				return err
+	/*
+		cenKeys := strings.Split(cenStatus.CENKeys, ",")
+		// store the cenreportID in cenkeys table, one row per key
+		for _, cenKey := range cenKeys {
+			cenKey := strings.Trim(cenKey, " \n")
+			if len(cenKey) > 30 && len(cenKey) <= 32 {
+				_, err = stmtKeys.Exec(cenKey, reportID, curTS)
+				if err != nil {
+					return err
+				}
 			}
 		}
+	*/
+
+	if cenStatus.StoredTimeStamp == 0 {
+		cenStatus.StoredTimeStamp = uint64(time.Now().Unix())
 	}
 
 	// store the cenreportID in cenReport table, one row per key
-	_, err = stmtReport.Exec(reportID, cenStatus.StatusID, cenStatus.ReportMimeType, curTS)
+	_, err = stmtReport.Exec(cenStatus.ReportID, cenStatus.StatusID, cenStatus.ReportMimeType, cenStatus.ReportTimeStamp, cenStatus.StoredTimeStamp)
 	if err != nil {
 		panic(5)
 		return err
@@ -254,6 +308,40 @@ func (backend *Backend) ProcessGetCENReport(cenKey string) (reports []*CENReport
 		reports = append(reports, &r)
 	}
 	return reports, nil
+}
+
+func (backend *Backend) getStatusID(report []byte) (int, error) {
+	var dat map[string]interface{}
+
+	if err := json.Unmarshal(report, &dat); err != nil {
+		return 0, err
+	}
+	/*
+	    if ok := dat["reportMetadata"]; !ok{
+		    return 0, nil
+	    }
+	*/
+	log.Printf("getStatusID %v\n", dat)
+	reportstr := strings.ToLower(dat["reportMetadata"].(string))
+	log.Printf("status = %v", dat)
+	if strings.Contains(reportstr, "negative") {
+		return 2, nil
+	} else if strings.Contains(reportstr, "positive") || strings.Contains(reportstr, "covid") {
+		return 1, nil
+	} else if strings.Contains(reportstr, "recovered") {
+		return 4, nil
+	}
+	return 0, nil
+}
+
+func (backend *Backend) getSymptoms(report []byte) ([]int, error) {
+	var dat map[string]interface{}
+
+	if err := json.Unmarshal(report, &dat); err != nil {
+		panic(err)
+	}
+	log.Printf("status = %v", dat)
+	return []int{1, 2, 3}, nil
 }
 
 // Computehash returns the hash of its inputs

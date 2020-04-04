@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS CENSymptom;
 DROP TABLE IF EXISTS CENSymptomType;
 DROP TABLE IF EXISTS CENStatus;
 DROP TABLE IF EXISTS CENStatusType;
+DROP TABLE IF EXISTS CENSymptomDictionary;
 
 -- reportID is uniq per entire record or per user?
 CREATE TABLE `CENKeys` (
@@ -21,6 +22,7 @@ CREATE TABLE `CENReport` (
    `report`     varchar(4000) DEFAULT "",
    `reportMimeType` varchar(64) DEFAULT "",
    `reportTS` int,
+   `storeTS` int,
    PRIMARY KEY (`reportID`),
    KEY (`reportTS`)
 );
@@ -30,6 +32,7 @@ CREATE TABLE `CENSymptom` (
    `symptomID` int,
    `reportMimeType` varchar(64) DEFAULT "",
    `reportTS` int,
+   `storeTS` int,
    PRIMARY KEY (`reportID`, `symptomID`),
    KEY (`reportTS`)
 );
@@ -45,16 +48,15 @@ symptomID 	symptom
 CREATE TABLE `CENSymptomType` (
    `symptomID` int,
    `symptom` varchar(32) DEFAULT "",
-   `reportMimeType` varchar(64) DEFAULT "",
-   `reportTS` int, 
-   PRIMARY KEY (`symptomID`),
-   KEY (`reportTS`)
+   PRIMARY KEY (`symptomID`)
 );
 
 /* not overwrite status. you can trace the status by CENKeys' reportTS */
 CREATE TABLE `CENStatus` (
    `reportID` varchar(64) DEFAULT "",
    `statusID` int,
+   `reportTS` int,
+   `storeTS` int,
    PRIMARY KEY(`statusID`)
 );
 
@@ -71,5 +73,7 @@ CREATE TABLE `CENStatusType` (
    PRIMARY KEY(`statusID`)
 );
 
-
-
+CREATE TABLE `CENSymptomDictionary` (
+   `symptomID` int,
+   `symptomWord` varchar(32)
+);
