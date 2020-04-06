@@ -224,7 +224,7 @@ func (s *Server) postSymptomHander(w http.ResponseWriter, r *http.Request) {
 	r.Body.Close()
 
 	// Parse body as CENReport
-	var payload backend.CENSymptomReport
+	var payload []backend.CENSymptomReport
 	err = json.Unmarshal(body, &payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

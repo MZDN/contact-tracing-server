@@ -427,7 +427,19 @@ func GetSampleCENStatusAndCENKeys(nKeys int) (cenStatus *CENStatus, cenKeys []st
 	return cenStatus, cenKeys
 }
 
-func (backend *Backend) ProcessSymptomReport(report *CENSymptomReport) (err error) {
+func (backend *Backend) ProcessSymptomReport(report []CENSymptomReport) (err error) {
+	/*
+		sKeys := "insert into CENSymptomReport (hashedPK, encodedMsg, reportTS) values ( ?, ?, ? ) "
+		stmtKeys, err := backend.db.Prepare(sKeys)
+	        if err != nil {
+	                return err
+	        }
+	        curTS := uint64(time.Now().Unix())
+		for i, r := range report{
+			stmtKeys.Exec(report.HashedPK, report.EncMsg, curTs)
+		}
+	*/
+	return nil
 }
 
 func (backend *Backend) ProcessSymptomReport(prefixBitVector []byte) (reportid uint64) {

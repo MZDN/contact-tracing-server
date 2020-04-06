@@ -77,3 +77,6 @@ CREATE TABLE `CENSymptomDictionary` (
    `symptomID` int,
    `symptomWord` varchar(32)
 );
+
+CREATE TABLE `CENSymptomReport` {
+   `
