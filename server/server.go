@@ -41,15 +41,17 @@ type Server struct {
 }
 
 // NewServer returns an HTTP Server to handle simple-api-process-flow https://github.com/Co-Epi/data-models/blob/master/simple-api-process-flow.md
-func NewServer(httpPort string, connString string) (s *Server, err error) {
+func NewServer(httpPort string, backend *backend.Backend) (s *Server, err error) {
 	s = &Server{
 		HTTPPort: httpPort,
 	}
-	backend, err := backend.NewBackend(connString)
-	if err != nil {
-		log.Printf("backend error %v", err)
-		return s, err
-	}
+	/*
+		backend, err := backend.NewBackend(connString)
+		if err != nil {
+			log.Printf("backend error %v", err)
+			return s, err
+		}
+	*/
 	s.backend = backend
 
 	mux := http.NewServeMux()
@@ -210,4 +212,91 @@ func (s *Server) getCENKeysHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("CEN API Server v0.2.1"))
+}
+
+//POST /censymptom
+func (s *Server) postSymptomHander(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	// Parse body as CENReport
+	var payload backend.CENSymptomReport
+	err = json.Unmarshal(body, &payload)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err := backend.ProcessSymptomReport(payload)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write([]byte("OK"))
+}
+
+//POST /cenrequestreport
+func (s *Server) postRequestSymptomReportHander(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
+	// Parse body as CENReport
+	var payload backend.CENSymptomRequest
+	err = json.Unmarshal(body, &payload)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	requestid, err := s.backend.RequestSymptomReport(payload.PrefixBitVector)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	//w.Write([]byte("OK"))
+	w.Write(requestid)
+}
+
+//GET /censymptomresult/reportid
+func (s *Server) getSymptomResultHandler(w http.ResponseWriter, r *http.Request) {
+	ts := uint64(0)
+	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	results, err := s.backend.ProcessSymptomResult(pathpieces[1])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	responsesJSON, err := json.Marshal(resultis)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Printf("genCENKeysHandler: %s\n", responsesJSON)
+	w.Write(responsesJSON)
+}
+
+//GET /censymptomstatus/reportid
+func (s *Server) getSymptomReportStatusHandler(w http.ResponseWriter, r *http.Request) {
+	ts := uint64(0)
+	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	results, err := s.backend.GetSymptomStatus(pathpieces[1])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	responsesJSON, err := json.Marshal(resultis)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Printf("genCENKeysHandler: %s\n", responsesJSON)
+	w.Write(responsesJSON)
 }

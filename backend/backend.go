@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -63,10 +65,30 @@ type CENStatus struct {
 	StoredTimeStamp uint64 `json:"storedTimeStamp,omitempty"`
 }
 
+type CENSymptomReport struct {
+	HashedPK []byte `json:"hashedPK"`
+	EncMsg   []byte `json:"encMsg"`
+}
+
+type CENSymptomRequest struct {
+	PrefixBitVector []byte `json:"prefixBitVector"`
+}
+
+type Config struct {
+	MysqlConn string `json:"mysqlConn,omitempty"`
+}
+
 // NewBackend sets up a client connection to BigTable to manage incoming payloads
-func NewBackend(mysqlConnectionString string) (backend *Backend, err error) {
+//func NewBackend(mysqlConnectionString string) (backend *Backend, err error) {
+func NewBackend(conf *Config) (backend *Backend, err error) {
+	mysqlconn := os.Getenv("MYSQLCONN")
+	if mysqlconn == "" {
+		mysqlconn = conf.MysqlConn
+	}
+	mysqlConnectionString := flag.String("conn", mysqlconn, "MySQL Connection String")
+
 	backend = new(Backend)
-	backend.db, err = sql.Open("mysql", mysqlConnectionString)
+	backend.db, err = sql.Open("mysql", *mysqlConnectionString)
 	if err != nil {
 		return backend, err
 	}
@@ -317,9 +339,9 @@ func (backend *Backend) getStatusID(report []byte) (int, error) {
 		return 0, err
 	}
 	/*
-	    if ok := dat["reportMetadata"]; !ok{
-		    return 0, nil
-	    }
+		    if ok := dat["reportMetadata"]; !ok{
+			    return 0, nil
+		    }
 	*/
 	log.Printf("getStatusID %v\n", dat)
 	reportstr := strings.ToLower(dat["reportMetadata"].(string))
@@ -403,4 +425,17 @@ func GetSampleCENStatusAndCENKeys(nKeys int) (cenStatus *CENStatus, cenKeys []st
 	cenStatus.StatusID = 1
 	cenStatus.CENKeys = CENKeys
 	return cenStatus, cenKeys
+}
+
+func (backend *Backend) ProcessSymptomReport(report *CENSymptomReport) (err error) {
+}
+
+func (backend *Backend) ProcessSymptomReport(prefixBitVector []byte) (reportid uint64) {
+	return 1
+}
+
+func (backend *Backend) GetSymptomResult(reportid uint64) (results []CENSymptomReport, err error) {
+}
+
+func (backend *Backend) GetSymptomReportStatus(reportid uint64) (statusid uint64) {
 }
