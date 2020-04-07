@@ -78,5 +78,15 @@ CREATE TABLE `CENSymptomDictionary` (
    `symptomWord` varchar(32)
 );
 
-CREATE TABLE `CENSymptomReport` {
-   `
+CREATE TABLE `CENReport` {
+   `hashedPK`  varchar(32),
+   `encodedMsg` varchar(256),
+   `reportTS` int,
+   `prefixHashedPK` varchar(24),
+   PRIMARY KEY(`hashedPK`),
+   KEY(`prefixHashedPK`)
+};
+
+
+
+

@@ -55,11 +55,13 @@ func NewServer(httpPort string, backend *backend.Backend) (s *Server, err error)
 	s.backend = backend
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.getConnection)
+	mux.HandleFunc("/report", s.postReportHander)
+	mux.HandleFunc("/qeury", s.postQueryHander)
 	s.Handler = mux
 	return s, nil
 }
 
+/*
 func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	log.Println("getConnection")
@@ -75,6 +77,7 @@ func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 		s.homeHandler(w, r)
 	}
 }
+*/
 
 // Start kicks off the HTTP Server
 func (s *Server) Start() (err error) {
@@ -130,92 +133,12 @@ func (s *Server) Start() (err error) {
 	return nil
 }
 
-// POST /cenreport
-func (s *Server) postCENReportHandler(w http.ResponseWriter, r *http.Request) {
-	// Read Post Body
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	r.Body.Close()
-
-	// Parse body as CENReport
-	var payload backend.CENReport
-	err = json.Unmarshal(body, &payload)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Process CENReport payload
-	err = s.backend.ProcessCENReport(&payload)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	w.Write([]byte("OK"))
-}
-
-// GET /cenreport/<cenkey>
-func (s *Server) getCENReportHandler(w http.ResponseWriter, r *http.Request) {
-	cenKey := ""
-	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(pathpieces) >= 1 {
-		cenKey = pathpieces[1]
-	} else {
-		http.Error(w, "Usage: Usage: /cenreport/<cenkey>", http.StatusBadRequest)
-		return
-	}
-
-	// Handle CenKey
-	reports, err := s.backend.ProcessGetCENReport(cenKey)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	responsesJSON, err := json.Marshal(reports)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fmt.Printf("getCENReportHandler: %s\n", responsesJSON)
-	w.Write(responsesJSON)
-}
-
-// GET /cenkeys/<timestamp>
-func (s *Server) getCENKeysHandler(w http.ResponseWriter, r *http.Request) {
-	ts := uint64(0)
-	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(pathpieces) > 1 {
-		tsa, err := strconv.Atoi(pathpieces[1])
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		ts = uint64(tsa)
-	} else {
-		ts = uint64(time.Now().Unix()) - 3600
-	}
-
-	cenKeys, err := s.backend.ProcessGetCENKeys(ts)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	responsesJSON, err := json.Marshal(cenKeys)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fmt.Printf("genCENKeysHandler: %s\n", responsesJSON)
-	w.Write(responsesJSON)
-}
-
 func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("CEN API Server v0.2.1"))
 }
 
-//POST /censymptom
-func (s *Server) postSymptomHander(w http.ResponseWriter, r *http.Request) {
+//POST /report
+func (s *Server) postReportHander(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -224,22 +147,22 @@ func (s *Server) postSymptomHander(w http.ResponseWriter, r *http.Request) {
 	r.Body.Close()
 
 	// Parse body as CENReport
-	var payload []backend.CENSymptomReport
+	var payload []backend.CENReport
 	err = json.Unmarshal(body, &payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	err := backend.ProcessSymptomReport(payload)
+	err = s.backend.ProcessReport(payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	w.Write([]byte("OK"))
 }
 
-//POST /cenrequestreport
-func (s *Server) postRequestSymptomReportHander(w http.ResponseWriter, r *http.Request) {
+//POST /query/timestamp
+func (s *Server) postQueryHander(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -247,56 +170,19 @@ func (s *Server) postRequestSymptomReportHander(w http.ResponseWriter, r *http.R
 	}
 	r.Body.Close()
 
-	// Parse body as CENReport
-	var payload backend.CENSymptomRequest
-	err = json.Unmarshal(body, &payload)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	requestid, err := s.backend.RequestSymptomReport(payload.PrefixBitVector)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	//w.Write([]byte("OK"))
-	w.Write(requestid)
-}
-
-//GET /censymptomresult/reportid
-func (s *Server) getSymptomResultHandler(w http.ResponseWriter, r *http.Request) {
-	ts := uint64(0)
+	/// need to do error handling
 	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-
-	results, err := s.backend.ProcessSymptomResult(pathpieces[1])
+	timestamp, err := strconv.ParseUint(pathpieces[2], 10, 64)
+	if err != nil {
+		////
+	}
+	reports, err := s.backend.ProcessQuery(body, timestamp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
-	responsesJSON, err := json.Marshal(resultis)
+	jsonReports, err := json.Marshal(reports)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		/////
 	}
-	fmt.Printf("genCENKeysHandler: %s\n", responsesJSON)
-	w.Write(responsesJSON)
-}
-
-//GET /censymptomstatus/reportid
-func (s *Server) getSymptomReportStatusHandler(w http.ResponseWriter, r *http.Request) {
-	ts := uint64(0)
-	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-
-	results, err := s.backend.GetSymptomStatus(pathpieces[1])
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	responsesJSON, err := json.Marshal(resultis)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	fmt.Printf("genCENKeysHandler: %s\n", responsesJSON)
-	w.Write(responsesJSON)
+	w.Write(jsonReports)
 }
