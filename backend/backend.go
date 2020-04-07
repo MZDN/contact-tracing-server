@@ -4,8 +4,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"strings"
+	"log"
+	"os"
+	//"strings"
 	"time"
 
 	"database/sql"
@@ -27,11 +30,17 @@ type Backend struct {
 
 // CENReport payload is sent by client to /cenreport when user reports symptoms
 type CENReport struct {
-	ReportID        string `json:"reportID,omitempty"`
-	Report          []byte `json:"report,omitempty"`  // this is expected to be a JSON blob but the server doesn't need to parse it
-	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
-	ReportMimeType  string `json:"reportMimeType,omitempty"`
-	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
+	HashedPK   []byte `json:"hashedPK"`
+	EncodedMsg []byte `json:"encodedMsg"`
+}
+
+type CENReportMeta struct {
+	Report         [][]byte `json:"report,omitempty"`
+	ReportMetaData string   `json:"reportMetaData,omitempty"`
+	L              string   `json:"l,omitempty"`
+	key            string   `json:"key,omitempty"`
+	j              int      `json:"j,omitempty"`
+	jMax           int      `json:"jMax,omitempty"`
 }
 
 type CENSymptom struct {
@@ -40,6 +49,7 @@ type CENSymptom struct {
 	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
 	ReportMimeType  string `json:"reportMimeType,omitempty"`
 	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
+	StoredTimeStamp uint64 `json:"storedTimeStamp,omitempty"`
 }
 
 type CENStatus struct {
@@ -48,12 +58,24 @@ type CENStatus struct {
 	CENKeys         string `json:"cenKeys,omitempty"` // comma separated list of base64 AES Keys
 	ReportMimeType  string `json:"reportMimeType,omitempty"`
 	ReportTimeStamp uint64 `json:"reportTimeStamp,omitempty"`
+	StoredTimeStamp uint64 `json:"storedTimeStamp,omitempty"`
+}
+
+type Config struct {
+	MysqlConn string `json:"mysqlConn,omitempty"`
 }
 
 // NewBackend sets up a client connection to BigTable to manage incoming payloads
-func NewBackend(mysqlConnectionString string) (backend *Backend, err error) {
+//func NewBackend(mysqlConnectionString string) (backend *Backend, err error) {
+func NewBackend(conf *Config) (backend *Backend, err error) {
+	mysqlconn := os.Getenv("MYSQLCONN")
+	if mysqlconn == "" {
+		mysqlconn = conf.MysqlConn
+	}
+	mysqlConnectionString := flag.String("conn", mysqlconn, "MySQL Connection String")
+
 	backend = new(Backend)
-	backend.db, err = sql.Open("mysql", mysqlConnectionString)
+	backend.db, err = sql.Open("mysql", *mysqlConnectionString)
 	if err != nil {
 		return backend, err
 	}
@@ -61,199 +83,14 @@ func NewBackend(mysqlConnectionString string) (backend *Backend, err error) {
 	return backend, nil
 }
 
-// ProcessCENReport manages the API Endpoint to POST /cenreport
-//  Input: CENReport
-//  Output: error
-//  Behavior: write report bytes to "report" table; write row for each CENKey with reportID
-func (backend *Backend) ProcessCENReport(cenReport *CENReport) (err error) {
-	reportData, err := json.Marshal(cenReport)
-	if err != nil {
-		return err
-	}
+func (backend *Backend) getSymptoms(report []byte) ([]int, error) {
+	var dat map[string]interface{}
 
-	// put the CENReport in CENKeys table
-	sKeys := "insert into CENKeys (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
-	stmtKeys, err := backend.db.Prepare(sKeys)
-	if err != nil {
-		return err
+	if err := json.Unmarshal(report, &dat); err != nil {
+		panic(err)
 	}
-
-	// put the CENReport in CENReport table
-	sReport := "insert into CENReport (reportID, report, reportMimeType, reportTS) values ( ?, ?, ?, ? ) on duplicate key update report = values(report)"
-	stmtReport, err := backend.db.Prepare(sReport)
-	if err != nil {
-		return err
-	}
-
-	curTS := uint64(time.Now().Unix())
-	reportID := fmt.Sprintf("%x", Computehash(reportData))
-	cenKeys := strings.Split(cenReport.CENKeys, ",")
-	// store the cenreportID in cenkeys table, one row per key
-	for _, cenKey := range cenKeys {
-		cenKey := strings.Trim(cenKey, " \n")
-		if len(cenKey) > 30 && len(cenKey) <= 32 {
-			_, err = stmtKeys.Exec(cenKey, reportID, curTS)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// store the cenreportID in cenReport table, one row per key
-	_, err = stmtReport.Exec(reportID, cenReport.Report, cenReport.ReportMimeType, curTS)
-	if err != nil {
-		panic(5)
-		return err
-	}
-
-	return nil
-}
-
-// ProcessCENReport manages the API Endpoint to POST /cenreport
-//  Input: CENReport
-//  Output: error
-//  Behavior: write report bytes to "report" table; write row for each CENKey with reportID
-func (backend *Backend) ProcessCENSymptom(cenSymptom *CENSymptom) (err error) {
-	// need to change Report's hash
-	reportData, err := json.Marshal(cenSymptom)
-	if err != nil {
-		return err
-	}
-
-	// put the CENReport in CENKeys table
-	sKeys := "insert into CENKeys_M (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
-	stmtKeys, err := backend.db.Prepare(sKeys)
-	if err != nil {
-		return err
-	}
-
-	// put the CENReport in CENReport table
-	sReport := "insert into CENSymptom (reportID, symptomID, reportMimeType, reportTS) values ( ?, ?, ?, ?) "
-	stmtReport, err := backend.db.Prepare(sReport)
-	if err != nil {
-		return err
-	}
-
-	curTS := uint64(time.Now().Unix())
-	reportID := fmt.Sprintf("%x", Computehash(reportData))
-	cenKeys := strings.Split(cenSymptom.CENKeys, ",")
-	// store the cenreportID in cenkeys table, one row per key
-	for _, cenKey := range cenKeys {
-		cenKey := strings.Trim(cenKey, " \n")
-		if len(cenKey) > 30 && len(cenKey) <= 32 {
-			_, err = stmtKeys.Exec(cenKey, reportID, curTS)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// store the cenreportID in cenReport table, one row per key
-	for _, symptomid := range cenSymptom.Symptoms {
-		_, err = stmtReport.Exec(reportID, symptomid, cenSymptom.ReportMimeType, curTS)
-		if err != nil {
-			panic(5)
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (backend *Backend) ProcessCENStatus(cenStatus *CENStatus) (err error) {
-	statusData, err := json.Marshal(cenStatus)
-	if err != nil {
-		return err
-	}
-
-	// put the CENReport in CENKeys table
-	sKeys := "insert into CENKeys (cenKey, reportID, reportTS) values ( ?, ?, ? ) on duplicate key update reportTS = values(reportTS)"
-	stmtKeys, err := backend.db.Prepare(sKeys)
-	if err != nil {
-		return err
-	}
-
-	// put the CENReport in CENReport table
-	sReport := "insert into CENStatus (reportID, statusID, reportMimeType, reportTS) values ( ?, ?, ?, ?) "
-	stmtReport, err := backend.db.Prepare(sReport)
-	if err != nil {
-		return err
-	}
-
-	curTS := uint64(time.Now().Unix())
-	reportID := fmt.Sprintf("%x", Computehash(statusData))
-	cenKeys := strings.Split(cenStatus.CENKeys, ",")
-	// store the cenreportID in cenkeys table, one row per key
-	for _, cenKey := range cenKeys {
-		cenKey := strings.Trim(cenKey, " \n")
-		if len(cenKey) > 30 && len(cenKey) <= 32 {
-			_, err = stmtKeys.Exec(cenKey, reportID, curTS)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// store the cenreportID in cenReport table, one row per key
-	_, err = stmtReport.Exec(reportID, cenStatus.StatusID, cenStatus.ReportMimeType, curTS)
-	if err != nil {
-		panic(5)
-		return err
-	}
-
-	return nil
-}
-
-// ProcessGetCENKeys manages the GET API endpoint /cenkeys
-//  Input: timestamp
-//  Output: array of CENKeys (in string form) for the last hour
-func (backend *Backend) ProcessGetCENKeys(timestamp uint64) (cenKeys []string, err error) {
-	cenKeys = make([]string, 0)
-
-	s := "select cenKey From CENKeys where ReportTS >= 0" // TODO: ReportTS > ? and ReportTS <= ?"
-	stmt, err := backend.db.Prepare(s)
-	if err != nil {
-		return cenKeys, err
-	}
-	rows, err := stmt.Query() // TODO: timestamp-3600, timestamp
-	if err != nil {
-		return cenKeys, err
-	}
-	for rows.Next() {
-		var cenKey string
-		err = rows.Scan(&cenKey)
-		if err != nil {
-			return cenKeys, err
-		}
-		cenKeys = append(cenKeys, cenKey)
-	}
-	return cenKeys, nil
-}
-
-// ProcessGetCENReport manages the POST API endpoint /cenreport
-//  Input: cenKey
-//  Output: array of CENReports
-func (backend *Backend) ProcessGetCENReport(cenKey string) (reports []*CENReport, err error) {
-	reports = make([]*CENReport, 0)
-
-	s := fmt.Sprintf("select CENKeys.reportID, Report, reportMimeType, CENReport.reportTS From CENKeys, CENReport where CENKeys.CENKey = ? and CENKeys.reportID = CENReport.reportID")
-	stmt, err := backend.db.Prepare(s)
-	if err != nil {
-		return reports, err
-	}
-	rows, err := stmt.Query(cenKey)
-	if err != nil {
-		return reports, err
-	}
-	for rows.Next() {
-		var r CENReport
-		err = rows.Scan(&(r.ReportID), &(r.Report), &(r.ReportMimeType), &(r.ReportTimeStamp))
-		if err != nil {
-			return reports, err
-		}
-		reports = append(reports, &r)
-	}
-	return reports, nil
+	log.Printf("status = %v", dat)
+	return []int{1, 2, 3}, nil
 }
 
 // Computehash returns the hash of its inputs
@@ -275,44 +112,66 @@ func makeCENKeyString() string {
 	return encoded
 }
 
-// GetSampleCENReportAndCENKeys generates a CENReport and an array of CENKeys (in string form)
-func GetSampleCENReportAndCENKeys(nKeys int) (cenReport *CENReport, cenKeys []string) {
-	cenKeys = make([]string, nKeys)
-	for i := 0; i < nKeys; i++ {
-		cenKeys[i] = makeCENKeyString()
+func (backend *Backend) ProcessReport(reports []CENReport) (err error) {
+	sReport := "insert into CENReport (hashedPK, encodedMsg, reportTS, prefixHashedPK) values ( ?, ?, ?, ? ) on duplicate key update report = values(report)"
+	stmtReport, err := backend.db.Prepare(sReport)
+	if err != nil {
+		return err
 	}
-	CENKeys := fmt.Sprintf("%s,%s", cenKeys[0], cenKeys[1])
-	cenReport = new(CENReport)
-	cenReport.ReportID = "1"
-	cenReport.Report = []byte("severe fever,coughing,hard to breathe")
-	cenReport.CENKeys = CENKeys
-	return cenReport, cenKeys
+
+	curTS := uint64(time.Now().Unix())
+	for _, report := range reports {
+		var prefixHashedPK []byte
+		prefixHashedPK = append(prefixHashedPK, report.HashedPK[0])
+		prefixHashedPK = append(prefixHashedPK, report.HashedPK[1])
+		prefixHashedPK = append(prefixHashedPK, report.HashedPK[2]&0xC0)
+		_, err = stmtReport.Exec(report.HashedPK, report.EncodedMsg, curTS, prefixHashedPK)
+		if err != nil {
+			// return or revart or continue
+			//	return err
+		}
+	}
+	return nil
 }
 
-// GetSampleCENReportAndCENKeys generates a CENReport and an array of CENKeys (in string form)
-func GetSampleCENSymptomAndCENKeys(nKeys int) (cenSymptom *CENSymptom, cenKeys []string) {
-	cenKeys = make([]string, nKeys)
-	for i := 0; i < nKeys; i++ {
-		cenKeys[i] = makeCENKeyString()
+func (backend *Backend) ProcessQuery(query []byte, timestamp uint64) (reports []CENReport, err error) {
+	sQuery := "SELECT (hashedPK, encodedMsg) from CENReport where prefixHashedPK = ?"
+	stmt, err := backend.db.Prepare(sQuery)
+	if err != nil {
+		return reports, err
 	}
-	CENKeys := fmt.Sprintf("%s,%s", cenKeys[0], cenKeys[1])
-	cenSymptom = new(CENSymptom)
-	cenSymptom.ReportID = "1"
-	cenSymptom.Symptoms = []int{1, 2, 4, 5, 7}
-	cenSymptom.CENKeys = CENKeys
-	return cenSymptom, cenKeys
-}
+	querylen := len(query)
+	posStartByte := 0
+	posStartBit := 0
+	for i := 0; ; i++ {
+		if i != 0 {
+			posStartByte = (18 * i) / 8
+			posStartBit = (18 * i) % 8
+		}
+		if posStartByte >= querylen {
+			break
+		}
 
-// GetSampleCENReportAndCENKeys generates a CENReport and an array of CENKeys (in string form)
-func GetSampleCENStatusAndCENKeys(nKeys int) (cenStatus *CENStatus, cenKeys []string) {
-	cenKeys = make([]string, nKeys)
-	for i := 0; i < nKeys; i++ {
-		cenKeys[i] = makeCENKeyString()
+		var prefixedHashedKey []byte
+		switch posStartBit {
+		case 0:
+		case 2:
+		case 4:
+		case 6:
+		}
+
+		rows, err := stmt.Query(prefixedHashedKey)
+		if err != nil {
+			return reports, err
+		}
+		for rows.Next() {
+			var r CENReport
+			err = rows.Scan(&(r.HashedPK), &(r.EncodedMsg))
+			if err != nil {
+				return reports, err
+			}
+			reports = append(reports, r)
+		}
 	}
-	CENKeys := fmt.Sprintf("%s,%s", cenKeys[0], cenKeys[1])
-	cenStatus = new(CENStatus)
-	cenStatus.ReportID = "1"
-	cenStatus.StatusID = 1
-	cenStatus.CENKeys = CENKeys
-	return cenStatus, cenKeys
+	return reports, err
 }
