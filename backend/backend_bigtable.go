@@ -58,6 +58,40 @@ func (backend *Backend) ProcessQuery(query []byte, timestamp int64) (reports []C
 		prefixkey := fmt.Sprintf("%x", query[q:(q+3)])
 		prefixkeys = append(prefixkeys, prefixkey)
 	}
+	/* 18 bit support
+	querylen := len(query)
+	posStartByte := 0
+	posStartBit := 0
+	for i := 0; ; i++ {
+		if i != 0 {
+			posStartByte = (18 * i) / 8
+			posStartBit = (18 * i) % 8
+		}
+		if posStartByte+2 >= querylen {
+			break
+		}
+
+		var prefixedHashedKey []byte
+		switch posStartBit {
+		case 0:
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte])
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+1])
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+2]&0xC0)
+		case 2:
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte]&0x3F<<2)|(query[posStartByte+1]&0xC0>>6))
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte+1]&0x3F<<2)|(query[posStartByte+2]&0xC0>>6))
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+2]&0x30<<2)
+		case 4:
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte]&0x0F<<4)|(query[posStartByte+1]&0xF0>>4))
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte+1]&0x0F<<4)|(query[posStartByte+2]&0xF0>>4))
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+2]&0x0C<<4)
+		case 6:
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte]&0x03<<6)|(query[posStartByte+1]&0xFC>>2))
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte+1]&0x03<<6)|(query[posStartByte+2]&0xFC>>2))
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+2]&0x03<<6)
+		}
+	}
+	*/
 
 	ctx := context.Background()
 	startTime := time.Unix(timestamp, 0)
