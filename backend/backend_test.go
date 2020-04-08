@@ -1,5 +1,57 @@
 package backend
 
+import (
+	"fmt"
+	"math/rand"
+	"os"
+	"testing"
+	"time"
+)
+
+func TestBackendReportQuery(t *testing.T) {
+	config := new(Config)
+	config.MysqlConn = "mayumi:c0v1d19w9lk3rmm!@tcp(34.83.154.244)/cenmm?charset=utf8"
+	backend, err := NewBackend(config)
+	if err != nil {
+		fmt.Println(err)
+		t.Fatal(err)
+	}
+
+	var reports []CENReport
+	var hashKeys [][]byte
+	for i := 0; i < 10; i++ {
+		key := make([]byte, 16)
+		rand.Read(key)
+		hashKey := Computehash(key)
+		hashKeys = append(hashKeys, hashKey)
+		symptom := "sample symptom"
+
+		report := CENReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
+		reports = append(reports, report)
+	}
+	err = backend.ProcessReport(reports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prefixHashedKey []byte
+	sampleKey := hashKeys[3]
+	sampleKey2 := hashKeys[6]
+	prefixHashedKey = append(prefixHashedKey, sampleKey[0])
+	prefixHashedKey = append(prefixHashedKey, sampleKey[1])
+	prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
+	prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
+	prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+
+	timestamp := uint64(time.Now().Unix())
+	res, err := backend.ProcessQuery(prefixHashedKey, timestamp)
+	wf, err := os.Create("/tmp/test.txt")
+	defer wf.Close()
+	wf.Write(prefixHashedKey)
+	for _, r := range res {
+		fmt.Printf("key = %x report = %s\n", r.HashedPK, r.EncodedMsg)
+	}
+}
+
 /*
 func TestBackendSimple(t *testing.T) {
 	cenReport, cenReportKeys := GetSampleCENReportAndCENKeys(2)

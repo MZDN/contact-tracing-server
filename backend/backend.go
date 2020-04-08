@@ -3,8 +3,9 @@ package backend
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
-	"flag"
+	//"flag"
 	"fmt"
 	"log"
 	"os"
@@ -72,11 +73,12 @@ func NewBackend(conf *Config) (backend *Backend, err error) {
 	if mysqlconn == "" {
 		mysqlconn = conf.MysqlConn
 	}
-	mysqlConnectionString := flag.String("conn", mysqlconn, "MySQL Connection String")
+	//mysqlConnectionString := flag.String("conn", mysqlconn, "MySQL Connection String")
 
 	backend = new(Backend)
-	backend.db, err = sql.Open("mysql", *mysqlConnectionString)
+	backend.db, err = sql.Open("mysql", mysqlconn)
 	if err != nil {
+		log.Println("err")
 		return backend, err
 	}
 
@@ -112,10 +114,18 @@ func makeCENKeyString() string {
 	return encoded
 }
 
+func makeCENKey() string {
+        key := make([]byte, 16)
+        rand.Read(key)
+        encoded := fmt.Sprintf("%x", key)
+        return encoded
+}
+
 func (backend *Backend) ProcessReport(reports []CENReport) (err error) {
-	sReport := "insert into CENReport (hashedPK, encodedMsg, reportTS, prefixHashedPK) values ( ?, ?, ?, ? ) on duplicate key update report = values(report)"
+	sReport := "insert into CENReport (hashedPK, encodedMsg, reportTS, prefixHashedPK) values ( ?, ?, ?, ? ) on duplicate key update hashedPK = values(hashedPK)"
 	stmtReport, err := backend.db.Prepare(sReport)
 	if err != nil {
+		log.Println("ProcessReport sql error", err)
 		return err
 	}
 
@@ -125,8 +135,9 @@ func (backend *Backend) ProcessReport(reports []CENReport) (err error) {
 		prefixHashedPK = append(prefixHashedPK, report.HashedPK[0])
 		prefixHashedPK = append(prefixHashedPK, report.HashedPK[1])
 		prefixHashedPK = append(prefixHashedPK, report.HashedPK[2]&0xC0)
-		_, err = stmtReport.Exec(report.HashedPK, report.EncodedMsg, curTS, prefixHashedPK)
+		_, err = stmtReport.Exec(fmt.Sprintf("%x", report.HashedPK), fmt.Sprintf("%x", report.EncodedMsg), curTS, fmt.Sprintf("%x", prefixHashedPK))
 		if err != nil {
+			log.Println("ProcessReport sql error ", err)
 			// return or revart or continue
 			//	return err
 		}
@@ -135,9 +146,10 @@ func (backend *Backend) ProcessReport(reports []CENReport) (err error) {
 }
 
 func (backend *Backend) ProcessQuery(query []byte, timestamp uint64) (reports []CENReport, err error) {
-	sQuery := "SELECT (hashedPK, encodedMsg) from CENReport where prefixHashedPK = ?"
+	sQuery := "SELECT hashedPK, encodedMsg from CENReport where prefixHashedPK = ? and reportTS < ?"
 	stmt, err := backend.db.Prepare(sQuery)
 	if err != nil {
+		log.Printf("ProcessQuery DB Prepare error %v", err)
 		return reports, err
 	}
 	querylen := len(query)
@@ -148,27 +160,53 @@ func (backend *Backend) ProcessQuery(query []byte, timestamp uint64) (reports []
 			posStartByte = (18 * i) / 8
 			posStartBit = (18 * i) % 8
 		}
-		if posStartByte >= querylen {
+		if posStartByte+2 >= querylen {
 			break
 		}
 
 		var prefixedHashedKey []byte
 		switch posStartBit {
 		case 0:
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte])
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+1])
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+2]&0xC0)
 		case 2:
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte]&0x3F<<2)|(query[posStartByte+1]&0xC0>>6))
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte+1]&0x3F<<2)|(query[posStartByte+2]&0xC0>>6))
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+2]&0x30<<2)
 		case 4:
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte]&0x0F<<4)|(query[posStartByte+1]&0xF0>>4))
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte+1]&0x0F<<4)|(query[posStartByte+2]&0xF0>>4))
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+2]&0x0C<<4)
 		case 6:
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte]&0x03<<6)|(query[posStartByte+1]&0xFC>>2))
+			prefixedHashedKey = append(prefixedHashedKey, (query[posStartByte+1]&0x03<<6)|(query[posStartByte+2]&0xFC>>2))
+			prefixedHashedKey = append(prefixedHashedKey, query[posStartByte+2]&0x03<<6)
 		}
 
-		rows, err := stmt.Query(prefixedHashedKey)
+		strHashedKey := fmt.Sprintf("%x", prefixedHashedKey)
+		rows, err := stmt.Query(strHashedKey, timestamp)
 		if err != nil {
+			log.Printf("ProcessQuery Query Error %v", err)
 			return reports, err
 		}
 		for rows.Next() {
 			var r CENReport
-			err = rows.Scan(&(r.HashedPK), &(r.EncodedMsg))
+			var hashedPK, encodedMsg string
+			err = rows.Scan(&(hashedPK), &(encodedMsg))
 			if err != nil {
+				log.Printf("ProcessQuery Next Error %v", err)
 				return reports, err
+			}
+			r.HashedPK, err = hex.DecodeString(hashedPK)
+			if err != nil {
+				log.Printf("ProcessQuery DecodeString Error %v", err)
+				continue
+			}
+			r.EncodedMsg, err = hex.DecodeString(encodedMsg)
+			if err != nil {
+				log.Printf("ProcessQuery DecodeString Error %v", err)
+				continue
 			}
 			reports = append(reports, r)
 		}

@@ -27,10 +27,10 @@ const (
 	DefaultPort = "8080"
 
 	// EndpointCENReport is the name of the HTTP endpoint for GET/POST of CENReport
-	EndpointCENReport = "cenreport"
+	EndpointCENReport = "report"
 
 	// EndpointCENKeys is the name of the HTTP endpoint for GET CenKeys
-	EndpointCENKeys = "cenkeys"
+	EndpointCENQuery = "query"
 )
 
 // Server manages HTTP connections
@@ -55,29 +55,30 @@ func NewServer(httpPort string, backend *backend.Backend) (s *Server, err error)
 	s.backend = backend
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/report", s.postReportHander)
-	mux.HandleFunc("/qeury", s.postQueryHander)
+	// will change it later
+	mux.HandleFunc("/", s.getConnection)
 	s.Handler = mux
 	return s, nil
 }
 
-/*
 func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	log.Println("getConnection")
 	if strings.Contains(r.URL.Path, EndpointCENReport) {
 		if r.Method == http.MethodPost {
-			s.postCENReportHandler(w, r)
+			s.postReportHander(w, r)
 		} else {
-			s.getCENReportHandler(w, r)
 		}
-	} else if strings.Contains(r.URL.Path, EndpointCENKeys) {
-		s.getCENKeysHandler(w, r)
+	} else if strings.Contains(r.URL.Path, EndpointCENQuery) {
+		if r.Method == http.MethodPost {
+			log.Println("bbbbbbb")
+		} else {
+		}
+		s.postQueryHander(w, r)
 	} else {
 		s.homeHandler(w, r)
 	}
 }
-*/
 
 // Start kicks off the HTTP Server
 func (s *Server) Start() (err error) {
@@ -139,6 +140,7 @@ func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
 
 //POST /report
 func (s *Server) postReportHander(w http.ResponseWriter, r *http.Request) {
+	log.Println("postReportHander")
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -172,7 +174,12 @@ func (s *Server) postQueryHander(w http.ResponseWriter, r *http.Request) {
 
 	/// need to do error handling
 	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	timestamp, err := strconv.ParseUint(pathpieces[2], 10, 64)
+	fmt.Println(pathpieces[0], pathpieces[1], len(pathpieces))
+	if len(pathpieces) != 2{
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	timestamp, err := strconv.ParseUint(pathpieces[1], 10, 64)
 	if err != nil {
 		////
 	}
