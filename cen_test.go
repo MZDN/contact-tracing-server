@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +15,10 @@ import (
 	"github.com/wolkdb/cen-server/backend"
 	"github.com/wolkdb/cen-server/server"
 )
+
+const endpoint = "covidwatch.wolk.com"
+
+//const endpoint = "d1.wolk.com:8080"
 
 // DefaultTransport contains all HTTP client operation parameters
 var DefaultTransport http.RoundTripper = &http.Transport{
@@ -84,74 +89,112 @@ func httpget(url string) (result []byte, err error) {
 
 func TestCENSimple(t *testing.T) {
 	hostname, err := os.Hostname()
-	if err != nil{
-	}
-	endpoint := fmt.Sprintf("%s.wolk.com:%d", hostname, server.DefaultPort)
-
-	// Post CENReport to /cenreport, along with CENKeys
-	cenReport, cenReportKeys := backend.GetSampleCENReportAndCENKeys(2)
-	cenReportJSON, err := json.Marshal(cenReport)
 	if err != nil {
-		t.Fatalf("err: %s", err)
 	}
+	localendpoint := fmt.Sprintf("%s.wolk.com:%s", hostname, server.DefaultPort)
 
-	// POST CENReport
-	result, err := httppost(fmt.Sprintf("https://%s/%s", endpoint, server.EndpointCENReport), cenReportJSON)
+	var reports []backend.CENReport
+	var hashKeys [][]byte
+	for i := 0; i < 10; i++ {
+		key := make([]byte, 16)
+		rand.Read(key)
+		hashKey := backend.Computehash(key)
+		hashKeys = append(hashKeys, hashKey)
+		symptom := "sample symptom"
+
+		report := backend.CENReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
+		reports = append(reports, report)
+	}
+	cenReportJSON, err := json.Marshal(reports)
+	_, err = httppost(fmt.Sprintf("https://%s/%s", localendpoint, server.EndpointCENReport), cenReportJSON)
 	if err != nil {
 		t.Fatalf("EndpointCENReport: %s", err)
 	}
-	fmt.Printf("EndpointCENReport[%s]\n", string(result))
 
-	// GET CENKeys
-	curTS := uint64(time.Now().Unix())
-	resp, err := httpget(fmt.Sprintf("https://%s/%s/%d", endpoint, server.EndpointCENKeys, curTS-10))
-	if err != nil {
-		t.Fatalf("EndpointCENKeys: %s", err)
-	}
-	fmt.Printf("EndpointCENKeys: %s\n", string(resp))
+	var prefixHashedKey []byte
+	sampleKey := hashKeys[3]
+	sampleKey2 := hashKeys[6]
+	prefixHashedKey = append(prefixHashedKey, sampleKey[0])
+	prefixHashedKey = append(prefixHashedKey, sampleKey[1])
+	prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
+	prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
+	prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
 
-	var cenKeys []string
-	err = json.Unmarshal(resp, &cenKeys)
+	result, err := httppost(fmt.Sprintf("https://%s/%s/%d", localendpoint, server.EndpointCENQuery, time.Now().Unix()), prefixHashedKey)
 	if err != nil {
-		t.Fatalf("EndpointCENKeys(check1): [%s] [%s]", resp, err)
+		t.Fatalf("EndpointCENReport: %s", err)
 	}
-	if len(cenKeys) < 2 {
-		t.Fatalf("Incorrect response length [%d] -- should be at least 2", len(cenKeys))
+
+	var resultreport []*backend.CENReport
+	err = json.Unmarshal(result, &resultreport)
+	if err != nil {
+		t.Fatalf("EndpointCENReport(check1): %s", err)
 	}
-	found := make([]bool, len(cenKeys))
-	for _, cenKey := range cenKeys {
-		for j, reportKey := range cenReportKeys {
-			if cenKey == reportKey {
-				found[j] = true
-			}
+	for _, r := range resultreport {
+		if bytes.Compare(r.HashedPK, sampleKey) == 0 || bytes.Compare(r.HashedPK, sampleKey2) == 0 {
+			fmt.Println("ok")
+		} else {
+			fmt.Println("err")
 		}
 	}
+}
 
-	// GET CENREport
-	for i := 0; i < 2; i++ {
-		if !found[i] {
-			t.Fatalf("EndpointCENKey key %d in report [%s] not found", i, cenReportKeys[i])
+func TestCENLong(t *testing.T) {
+	var reports []backend.CENReport
+	var hashKeys [][]byte
+	key := make([]byte, 16)
+	msg := make([]byte, 128)
+	timeStart := time.Now()
+	for reportNum := 0; reportNum < 10; reportNum++ {
+		for i := 0; i < 100; i++ {
+			rand.Read(key)
+			hashKey := backend.Computehash(key)
+			hashKeys = append(hashKeys, hashKey)
+			rand.Read(msg)
+
+			report := backend.CENReport{HashedPK: hashKey, EncodedMsg: msg}
+			reports = append(reports, report)
 		}
-
-		cenKey := cenReportKeys[i]
-		reportsRaw, err := httpget(fmt.Sprintf("https://%s/%s/%s", endpoint, server.EndpointCENReport, cenKey))
+		cenReportJSON, err := json.Marshal(reports)
+		timeReportStart := time.Now()
+		_, err = httppost(fmt.Sprintf("https://%s/%s", endpoint, server.EndpointCENReport), cenReportJSON)
+		fmt.Printf("request %d time %v\n", reportNum, time.Since(timeReportStart))
 		if err != nil {
 			t.Fatalf("EndpointCENReport: %s", err)
 		}
-		var reports []*backend.CENReport
-		err = json.Unmarshal(reportsRaw, &reports)
+	}
+	fmt.Printf("request totaltime = %v\n", time.Since(timeStart))
+
+	queryTimeTotalStart := time.Now()
+	for queryNum := 0; queryNum < 10; queryNum++ {
+		var prefixHashedKey []byte
+		sampleKey := hashKeys[rand.Intn(100)]
+		sampleKey2 := hashKeys[rand.Intn(100)]
+		prefixHashedKey = append(prefixHashedKey, sampleKey[0])
+		prefixHashedKey = append(prefixHashedKey, sampleKey[1])
+		prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
+		prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
+		prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+
+		queryTimeStart := time.Now()
+		result, err := httppost(fmt.Sprintf("https://%s/%s/%d", endpoint, server.EndpointCENQuery, time.Now().Unix()), prefixHashedKey)
+		fmt.Printf("query %d time %v\n", queryNum, time.Since(queryTimeStart))
+		if err != nil {
+			t.Fatalf("EndpointCENReport: %s", err)
+		}
+
+		var resultreport []*backend.CENReport
+		err = json.Unmarshal(result, &resultreport)
 		if err != nil {
 			t.Fatalf("EndpointCENReport(check1): %s", err)
 		}
-		if len(reports) > 0 {
-			report := reports[0]
-			fmt.Printf("EndpointCENKeys SUCCESS: [%s]\n", report.Report)
-
-			if !bytes.Equal(report.Report, cenReport.Report) {
-				t.Fatalf("EndpointCENKeys(check1) Expected %s, got %s", cenReport.Report, report.Report)
+		for _, r := range resultreport {
+			if bytes.Compare(r.HashedPK, sampleKey) == 0 || bytes.Compare(r.HashedPK, sampleKey2) == 0 {
+				//fmt.Println("ok")
+			} else {
+				fmt.Println("err")
 			}
-		} else {
-			t.Fatalf("hmm, no report (%s)", cenKey)
 		}
 	}
+	fmt.Printf("query total%v\n", time.Since(queryTimeTotalStart))
 }

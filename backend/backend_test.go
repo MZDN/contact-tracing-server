@@ -1,5 +1,74 @@
 package backend
 
+import (
+	"fmt"
+	"math/rand"
+	"testing"
+	"time"
+)
+
+func TestBackendReportQuery(t *testing.T) {
+	config := new(Config)
+	config.BigtableProject = "us-west1-wlk"
+	config.BigtableInstance = "findmypk"
+
+	backend, err := NewBackend(config)
+	if err != nil {
+		fmt.Println(err)
+		t.Fatal(err)
+	}
+
+	var reports []CENReport
+	var hashKeys [][]byte
+	for i := 0; i < 10; i++ {
+		key := make([]byte, 16)
+		rand.Read(key)
+		hashKey := Computehash(key)
+		hashKeys = append(hashKeys, hashKey)
+		symptom := "sample symptom"
+
+		report := CENReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
+		reports = append(reports, report)
+	}
+	err = backend.ProcessReport(reports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second * 3)
+	scantime := time.Now()
+	time.Sleep(time.Second * 3)
+	fmt.Println("scantime", scantime.UnixNano())
+	for i := 0; i < 10; i++ {
+		key := make([]byte, 16)
+		rand.Read(key)
+		hashKey := Computehash(key)
+		hashKeys = append(hashKeys, hashKey)
+		symptom := "sample symptom"
+
+		report := CENReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
+		reports = append(reports, report)
+	}
+	err = backend.ProcessReport(reports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prefixHashedKey []byte
+	sampleKey := hashKeys[3][:3]
+	sampleKey2 := hashKeys[6][:3]
+	sampleKey3 := hashKeys[13][:3]
+	sampleKey4 := hashKeys[16][:3]
+	prefixHashedKey = append(prefixHashedKey, sampleKey...)
+	prefixHashedKey = append(prefixHashedKey, sampleKey2...)
+	prefixHashedKey = append(prefixHashedKey, sampleKey3...)
+	prefixHashedKey = append(prefixHashedKey, sampleKey4...)
+	time.Sleep(time.Second * 3)
+
+	res, err := backend.ProcessQuery(prefixHashedKey, scantime.Unix())
+	for _, r := range res {
+		fmt.Printf("key = %x report = %s\n", r.HashedPK, r.EncodedMsg)
+	}
+}
+
 /*
 func TestBackendSimple(t *testing.T) {
 	cenReport, cenReportKeys := GetSampleCENReportAndCENKeys(2)
