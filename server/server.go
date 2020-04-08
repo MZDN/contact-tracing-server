@@ -68,13 +68,14 @@ func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			s.postReportHander(w, r)
 		} else {
+			s.homeHandler(w, r)
 		}
 	} else if strings.Contains(r.URL.Path, EndpointCENQuery) {
 		if r.Method == http.MethodPost {
-			log.Println("bbbbbbb")
+			s.postQueryHander(w, r)
 		} else {
+			s.homeHandler(w, r)
 		}
-		s.postQueryHander(w, r)
 	} else {
 		s.homeHandler(w, r)
 	}
@@ -175,7 +176,7 @@ func (s *Server) postQueryHander(w http.ResponseWriter, r *http.Request) {
 	/// need to do error handling
 	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	fmt.Println(pathpieces[0], pathpieces[1], len(pathpieces))
-	if len(pathpieces) != 2{
+	if len(pathpieces) != 2 {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
