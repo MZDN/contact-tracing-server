@@ -180,7 +180,7 @@ func (s *Server) postQueryHander(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	timestamp, err := strconv.ParseUint(pathpieces[1], 10, 64)
+	timestamp, err := strconv.ParseInt(pathpieces[1], 10, 64)
 	if err != nil {
 		////
 	}
