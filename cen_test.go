@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wolkdb/cen-server/backend"
-	"github.com/wolkdb/cen-server/server"
+	"github.com/wolkdb/findmypk-server/backend"
+	"github.com/wolkdb/findmypk-server/server"
 )
 
 const endpoint = "covidwatch.wolk.com"

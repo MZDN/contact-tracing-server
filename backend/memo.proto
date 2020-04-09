@@ -11,4 +11,3 @@ message Memo {
   int32          diseaseID = 2; //0=Healthy, 1=Unhealthy/Unknown, 2= COVID-19
   repeated int32 symptomID = 3;
 }
-z
