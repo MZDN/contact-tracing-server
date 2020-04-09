@@ -1,182 +1,220 @@
-# CEN API Go Server
+# Find My PK (FMPK) Protocol v0.1 
+Inspired by Apple’s _Find My_ Protocol
 
-This is the Go implementation of the CEN API for _Privacy-Preserving Distributed Contact Tracing_,
-to be used in the [CoEpi iOS](https://github.com/Co-Epi/app-ios) and [CoEpi Android](https://github.com/Co-Epi/app-android) apps and other applications following CEN protocols.
+Gary Belvin, gdbelvin@gmail.com
+README based on [2020 April 5](https://docs.google.com/document/d/1jFOic0--h1Le5x44iwj3jY0k23nUuEL9gGgPSE0H-hs/edit#)
 
-Our mission is to reduce transmission of disease, by developing applications and protocols that support
-contact tracing without loss of privacy (no identifiable information).  The CEN Protocol achieves this goal
-by combining Bluetooth Low Energy with lightweight client and server technology.
 
-*Tech Lead*: Sourabh Niyogi (`sourabh@wolk.com`)
+Status: Implementation In Progress
 
-The flow is as follows:
+Implementation by [Wolk](https://wolk.com) under COVID License:
+* `wolkdb/findmypk-server` - Go Server using Google BigTable
+* `wolkdb/findmypk-ios` - iOS Client (pure native Swift)
+* `wolkdb/findmypk-android` - Android Client (pure native Kotlin)
 
-1. iOS/Android Apps use secret 128-bit AES keys (CENKeys) to broadcast CENs using Bluetooth Low Energy (BLE)
+Contributors:
+* Sourabh Niyogi (findmypk-android, findmypk-server), sourabh@wolk.com
+* Mayumi Matsumoto (findmypk-server)
+* Michael Chung (findmypk-server)
+* Rodney Witcher (findmypk-ios)
 
-2. CEN Apps records neighbor CENs in close physical proximity to the user.
+Contributions sought on:
+* iOS-iOS background BLE Scan (submit PR)
+* Security analyses (submit PR)
 
-3. Users submit symptom / infection reports and reveal the secret CENKey in their application to a CEN API endpoint, resulting in a POST to `/cenreport` endpoint with `Report`  
+## Objectives
+* Enable users to notify the people they were physically proximate to in the last two weeks if they develop symptoms for CoVID19. 
+* Do so in a privacy preserving way that does not leak their contacts, or health status to anyone other than the intended recipients (the people they were physically proximate to)
+* Compatibility with existing protocols such as Apple’s Find My protocol
+* Interoperability with the TCN protocol
 
-4. Apps poll every N mins to `/cenkeys` for CENKeys and matches them to CENs the user has observed.
+## Security Goals
+* Server Privacy: An honest-but-curious server should not learn information about any user's location or contacts.
+* Source Integrity: Users cannot send reports to users they did not come in contact with or on behalf of other users.
+* Broadcast Integrity: Users cannot broadcast TCNs they did not generate.
+* No Passive Tracking: A passive adversary monitoring Bluetooth connections should not be able to learn any information about the location of users who do not send reports.
+* Receiver Privacy: Users who receive reports do not reveal information to anyone.
+* Reporter Privacy: Users who send reports do not reveal information to users they did not come in contact with, and reveal only the time of contact to users they did come in contact with. Note that in practice, the timing alone may still be sufficient for their contact to learn their identity (e.g., if their contact was only around one other person at the time).
 
-5. Upon match, the application retrieves the report for user action that re
+## Protocol
 
-## Active Endpoint
-* CEN API Endpoint: (active) https://coepi.wolk.com:8080   
-* CEN API Documentation in Postman: https://documenter.getpostman.com/view/10811660/SzYXXzC8?version=latest
+### Receivers
 
-## Documentation
+1. Every 15 minutes, or as often as a phone’s MAC address changes
+   * Generate an ephemeral public, private key pair `(pk, sk)`
+On iOS it is not possible to tell how often the MAC address changes, so the best we can do is rotate this key faster than the MAC rotation. [Reference](https://petsymposium.org/2019/files/papers/issue3/popets-2019-0036.pdf)
 
-v2 Core Design: https://docs.google.com/document/d/1f65V3PI214-uYfZLUZtm55kdVwoazIMqGJrxcYNI4eg/edit)
+2. Broadcast `pk, sig, m` over Low Energy Bluetooth
 
-This design is expected be revised subject to CoEpi iOS / Android POC.
-Please provide feedback over Slack and standup.
+    * The public key `pk` acts like a random, untraceable, contact event number.
+    * The sig is over `m` which may or may not reveal symptoms, diseases, and health authority certification.
+    
+    *Broadcast method*: 
+    * Use Service UUID (but no Service Data)
+    * Use Characteristic Data field (max 512 bytes) to broadcast:
+`u8 | PublicKey | u8 | Signature | u8 | memo`
+where each u8 is the number of bytes for the attribute immediately following it.  The broadcaster keep the private keys around in local storage for 2 weeks to decrypt messages retrieved later.
+    
+## Reporters
+1. Record all observed public keys `(pk,sig,memo)` (after Signature verification) as they are observed and store them for at least two weeks  
 
-### POST `/cenreport`
-Request Body: JSON Object - `CENReport`
+2. In the event that an individual develop symptoms for CoVID 19 or has a positive test
+a. Construct a message “m” using this protobuf:
 ```
-# curl -X POST "https://coepi.wolk.com:8080/cenreport/13298327ebcebe7f153b956e4596d503" -d '{"reportID":"80d2910e783ab87837b444c224a31c9745afffaaacd4fb6eacf233b5f30e3113","report":"c2V2ZXJlIGZldmVyLGNvdWdoaW5nLGhhcmQgdG8gYnJlYXRoZQ==","cenKeys":"b85c4b373adde4c66651ba63aef40f48,41371323cc938a0e3c55b0694bfd23f5","reportTimeStamp":1585622063}'
+message FindMyPKMemo {
+  enum ReportType {
+   SELF_REPORTED       = 0;
+   CERTIFIED_INFECTION = 1;
+  }
+  ReportType     reportType = 1;
+  int32 diseaseID = 2; // 0=Healthy, 1=Unhealthy/Unknown, 2= COVID-19
+  repeated int32 symptomID = 3;  
+  // Could be used with no key rotation while someone is quarantined 
+  bytes publicHealthAuthorityPublicKey = 4;
+  bytes signature = 5;  
+}
 ```
+b. Encrypt the message `m`:
 
-### GET `/cenkeys/<timestamp>`
+* Generate an ephemeral public key `pk_b`
+* Combine `pk_b` with `pk_a` using Diffie-Hellman to produce a session secret (`ss`)
+* Encrypt the message using AES_GCM
+Ciphertext = IV, EncMsg, MAC = AES_GCM(ss, m)
 
-Returns CENKeys from `<timestamp>` to `<timestamp-3600>` (Under consideration)
+Upload a vector of tuples `[]((H(pk_a), pk_b, AES_GCM(DH(pk_a, pk_b), m))`
+By not uploading or sharing `pk`, we preserve the notion that knowledge of `pk` is evidence of having observed `pk`.
 
-Sample:
-```
-# curl "https://coepi.wolk.com:8080/cenkeys"
-["13298327ebcebe7f153b956e4596d503","a6ad64cecdc9e2cf6ffb400fc71c1d62"]
-```
+## Servers
+
+1. Store tuples in buckets indexed by a fixed length prefix `H(pk)`, 
+This enables users to query buckets without revealing the full `H(pk)` they own or have observed, a form of private set intersection.
+
+## Inter-Server Sync
+Because these tuples do not contain private information and are self verifying, the server’s dataset can be made public and be synced with other servers without permissioning. 
+
+## Query
+Receivers periodically query the server for messages that may have been sent to the public keys they broadcast. 
+
+1. The receiver sends a vector of prefixes of H(pk) to the server.
+* 1 prefix (the first n  bits of `H(pk)`) per 15 minute window the user would like to query for contact overlap. 
+* This prevents the server from knowing the exact H(pk) being queried, and provides k anonymity / plausible deniability about whether there is a match.
+2. The server responds with all `(H(pk), Enc(pk, m))` tuples in the requested buckets. 
+3. The receiver discards messages that are not for H(pk)
+4. The receiver validates messages. 
+5. At the end of the query, the receiver will know:
+a. The number of times the receiver was exposed in the past 2 weeks.
+b. The times, locations, and other metadata the receiver may have recorded along with the pks at the time they were broadcast. 
 
 
+## Performance Costs
 
-### GET `/cenreport/<cenkey>`
+### Assumptions
 
-Returns reports associated with CENKey.
+| # | Stat | Notes/Assumptions|
+|----------|---------|------------------------------|
+| 1.00E+06 | Reports | https://ourworldindata.org/grapher/total-cases-covid-19 | 
+| 1.00E+09 | Receivers | https://datareportal.com/global-digital-overview
+| 1344 | FMPK Per Report | Assumes a person saw a unique FMPK ever 15 min for 2 weeks
+| 1344 | Prefix Matches Per Query | Assumes the receiver was near an infected person every 15 min for 2 weeks
+| 1 |  Days between queries | 
+| 32/65 |  Public Key Bytes  | ECDSA-256 | 
+| 32 | H(pk) | SHA-256 | 
+| 29 | Enc(pk, msg) | Len(AES_GCM(DH(pk_a, pk_b), msg))| 
+| 93 | Bytes Per FMPK report | H(pk) + pk_b + Enc(pk, msg) | 
 
-Sample:
-```
-# curl "https://coepi.wolk.com:8080/cenreport/13298327ebcebe7f153b956e4596d503"
-[{"reportID":"338b0448df60447a23b36fd02ad5a7d8f036836e0ce52b848d3302001cc67a40","report":"c2V2ZXJlIGZldmVyLGNvdWdoaW5nLGhhcmQgdG8gYnJlYXRoZQ==","reportTimeStamp":1585622194}
-```
+
+## Bandwidth Costs
+
+| Prefix Size | K Anonymity | Bucket Size (Kb) |  Query (Kb) | Response (Mb) | Egress (Mbs) | 
+|-------------|-------------|------------------|-------------|------------------|--------------|
+| 18 | 5,127 | 465.6 | 24 |  611.1 | 117,890 |
+| 20 | 1,282 | 116.4 | 26 | 152.8 | 29,472 | 
+| 24 |  80 |  7.3 | 32 | 9.5 |  1,842 |
+| 30 |  1  |  0.1 | 39 | 0.1 | 29 | 
+
+K Anonymity in this table is "per FMPK". This does not provide K anonymity for the user because each user will have a unique pattern of queries across multiple FMPK buckets.
+
+## Storage Costs
+
+|#      | Storage          |
+|-------|----------------- |
+| 106   | Kb Per Report    |
+| 101   | Gb Total Storage |
+
+## Compatibility
+
+### With Apple’s Find My Protocol
+
+Apple is already broadcasting ephemeral public keys over low energy bluetooth. 
+
+By observing, storing and encrypting messages with these public keys, a service could collaborate with Apple to do the lookup protocol.  Apple’s cooperation here would be needed since they control the app that has access to the private keys that this protocol would be encrypting messages to. 
+
+In Apple’s Find My protocol, broadcast is “opt in”, listening is “opt out”
+
+Integration with Apple’s protocol may not be be as desirable a design goal as I initially thought, both because of the opt-in issue, but also because of the unlikely possibility of gaining access to the private keys associated with the Find My Protocol. 
+
+### With TCN protocol
+
+The public key can be treated like the temporary contact number (TCN) because it is ephemeral and changing every 15 minutes. 
+
+The present TCN protocol, however, reveals TCNKeys directly to the server during the reporting phase. and the query phase, breaking the ability to reason accurately about whether TCNs were observed or queried. 
+
+It could be remedied by modifying the TCN protocol to upload (H(TCN), HMAC(TCN, 1)) during the reporting phase, shielding TCN from the server.  This is not possible because TCNv3 downloads batches of TCNs via TCNKey’s to make the protocol tractable while retaining full privacy. 
+
+## Security and Privacy Comparison to TCN
+
+### Server Privacy: An honest-but-curious server should not learn information about any user's location or contacts.
+
+TCN or H(TCN) is a random ID that changes frequently enough that it should not be linkable across times and locations.  
+
+Malicious parties could go around geotagging observed TCNs, effectively adding a map to a report that they were physically present to observe. 
 
 
-### MySQL Setup
+### Source Integrity: Users cannot send reports to users they did not come in contact with or on behalf of other users.
 
-1. After setting up your Mysql instance and updating the Default Connection strings in server.go, create tables with `cen.sql`
+By uploading a proof of knowledge of TCN in the form of a) Enc(TCN,1) or b HMAC(TCN, 1), we prevent others from being able to generate reports without directly observing TCN for themselves.
 
-2. Check that you can (a) POST a CEN Report; (b) GET CEN Keys; (c) GET CEN Reports  with `go test -run TestBackendSimple`
-```
-[root@d5 backend]# go test -run TestBackendSimple
-CENReportJSON Sample: {"reportID":"1","report":"c2V2ZXJlIGZldmVyLGNvdWdoaW5nLGhhcmQgdG8gYnJlYXRoZQ==","cenKeys":"79c256d12f5cad1af81e3658c0416e4e,4c29aa2b332199c82c825887ba179e27"}
-CENKey 0: 79c256d12f5cad1af81e3658c0416e4e
-CENKey 1: 4c29aa2b332199c82c825887ba179e27
-ProcessGetCENKeys 18 records
-Recent Keys: [67f48de38f35c231e34e533649ecbfeb]
-Recent Keys: [b85c4b373adde4c66651ba63aef40f48]
-Recent Keys: [046316753d2e5684d542a0a53944c6f7]
-Recent Keys: [41371323cc938a0e3c55b0694bfd23f5]
-Recent Keys: [8a54afbc79912d56d30d357ca6d86f06]
-Recent Keys: [a8c15b2e81c7aa185618698b9bc61eb8]
-Recent Keys: [001cb7c122064b79ebd2e878889c17c0]
-Recent Keys: [fc87cbdf6e3638cb9ddffbe77cddff07]
-Recent Keys: [5c52f9a5e539d69b179c5badb4aed724]
-Recent Keys: [6413987722a3590faf38ec84461e5d2f]
-Recent Keys: [0c0b9ddff6ab2d22519a793d941bdeb5]
-Recent Keys: [befa6a1c065c9162890edd614ec33fcd]
-Recent Keys: [4cfc2187fa3c6e5c9cafaeb03d09298c]
-Recent Keys: [a1c7d918f2f7d464b493a6ed3e200bfd]
-Recent Keys: [2cb87ba2f39a3119e4096cc6e04e68a8]
-Recent Keys: [4bb5c242916d923fe3565bd5c6b09dd3]
-Recent Keys: [4c29aa2b332199c82c825887ba179e27]
-Recent Keys: [79c256d12f5cad1af81e3658c0416e4e]
-ProcessGetCENReport SUCCESS (67f48de38f35c231e34e533649ecbfeb): [severe fever,coughing,hard to breathe]
-ProcessGetCENReport SUCCESS (b85c4b373adde4c66651ba63aef40f48): [severe fever,coughing,hard to breathe]
-PASS
-ok	github.com/Co-Epi/coepi-backend-go/backend	0.032s
-```
 
-## Build + Run
-```
-$ make cen
-go build -o bin/cen
-Done building cen.  Run "bin/cen" to launch CEN Server.
-```
+### Broadcast Integrity: Users cannot broadcast TCNs they did not generate.
 
-## Test
+In the present form, malicious parties could rebroadcast TCNs. 
 
-After getting your SSL Certs in the right spot with a DNS entry that matches and running `bin/cen`, you can run this test:
-```
-[root@d5 coepi-backend-go]# go test -run TestCEN
-EndpointCENReport[OK]
-EndpointCENKeys: ["67f48de38f35c231e34e533649ecbfeb","b85c4b373adde4c66651ba63aef40f48","046316753d2e5684d542a0a53944c6f7","41371323cc938a0e3c55b0694bfd23f5","8a54afbc79912d56d30d357ca6d86f06","a8c15b2e81c7aa185618698b9bc61eb8","001cb7c122064b79ebd2e878889c17c0","fc87cbdf6e3638cb9ddffbe77cddff07","5c52f9a5e539d69b179c5badb4aed724","6413987722a3590faf38ec84461e5d2f","0c0b9ddff6ab2d22519a793d941bdeb5","befa6a1c065c9162890edd614ec33fcd","4cfc2187fa3c6e5c9cafaeb03d09298c","a1c7d918f2f7d464b493a6ed3e200bfd","2cb87ba2f39a3119e4096cc6e04e68a8","4bb5c242916d923fe3565bd5c6b09dd3","4c29aa2b332199c82c825887ba179e27","79c256d12f5cad1af81e3658c0416e4e","0e987952d86e19197a2be845d4423ae7","e98a09d7c3e9f7a9e43906f2eb8635d7"]
-EndpointCENKeys SUCCESS: [severe fever,coughing,hard to breathe]
-EndpointCENKeys SUCCESS: [severe fever,coughing,hard to breathe]
-PASS
-ok	github.com/Co-Epi/coepi-backend-go	0.124s
-```
+This could be mitigated by encrypting the time of the observed TCN in the report. This would give the receiver additional opportunities to validate the TCN, and prevent rebroadcasting at different times. If preventing rebroadcast at the same time, but in different locations is a goal, the location could be included in the message as well. 
 
-which does the same things as the above backend test except going through the HTTP Server.
+###  No Passive Tracking: A passive adversary monitoring Bluetooth connections should not be able to learn any information about the location of users who do not send reports.
 
-### How it works (at a glance)
+Users who do not send reports do not upload information other than:
+* The prefix of `H(pk)`
+* New unlinkable TCNs over bluetooth
 
-Right now the schema is pretty simple.  
+Physically co-present passive trackers on bluetooth will be able to associate times and locations with the TCNs they observe. 
 
-1. `CENKeys` holds the mapping between revealed keys (cenKey) and reports (reportID), with `reportID` being the join key between the 2 tables.
+### Receiver Privacy: Users who receive reports do not reveal information to anyone.
 
-```
-mysql> select * from CENKeys;
-+----------------------------------+------------------------------------------------------------------+------------+
-| cenKey                           | reportID                                                         | reportTS   |
-+----------------------------------+------------------------------------------------------------------+------------+
-| 67f48de38f35c231e34e533649ecbfeb | e6f6cc772d11270cbac9b6e6cb24c451dc54b54172547f9ce327e9b5c5961609 | 1585326035 |
-| b85c4b373adde4c66651ba63aef40f48 | e6f6cc772d11270cbac9b6e6cb24c451dc54b54172547f9ce327e9b5c5961609 | 1585326035 |
-| 046316753d2e5684d542a0a53944c6f7 | 601e2a74dd04f3ec8b29012cefb92975eb31b60015584c803a4c27746537c23e | 1585326038 |
-| 41371323cc938a0e3c55b0694bfd23f5 | 601e2a74dd04f3ec8b29012cefb92975eb31b60015584c803a4c27746537c23e | 1585326038 |
-....
-| 2cb87ba2f39a3119e4096cc6e04e68a8 | ef932667e953f400ee0ea3b6bf70e463f6adf57f124673db71b34d9ca93b91e4 | 1585326239 |
-| 4bb5c242916d923fe3565bd5c6b09dd3 | ef932667e953f400ee0ea3b6bf70e463f6adf57f124673db71b34d9ca93b91e4 | 1585326239 |
-| 4c29aa2b332199c82c825887ba179e27 | 68883a2b8ea382397114376c9c099fdde6a18e4f9c9b35f1177a9e0010a7818f | 1585326764 |
-| 79c256d12f5cad1af81e3658c0416e4e | 68883a2b8ea382397114376c9c099fdde6a18e4f9c9b35f1177a9e0010a7818f | 1585326764 |
-| 0e987952d86e19197a2be845d4423ae7 | 80d96e77ba86ff1766e8b0e6086f3b9266e9edc5e5a87cc87cc222331ecc6de8 | 1585326891 |
-| e98a09d7c3e9f7a9e43906f2eb8635d7 | 80d96e77ba86ff1766e8b0e6086f3b9266e9edc5e5a87cc87cc222331ecc6de8 | 1585326891 |
-+----------------------------------+------------------------------------------------------------------+------------+
-```
+By uploading many H(pk) prefixes, users uniquely identify themselves. 
+If this is a significant problem, fancier cryptographic private set intersection protocols can be used, but these become complex and computationally expensive. 
 
-2. `CENReport` holds the reports
+Users can break linkability between requests, however, by making requests in non-overlapping batches. Or by making use of a mix net or a proxy to make the requests. 
 
-```
-mysql> select * from CENReport;
-+------------------------------------------------------------------+---------------------------------------+----------------+------------+
-| reportID                                                         | report                                | reportMimeType | reportTS   |
-+------------------------------------------------------------------+---------------------------------------+----------------+------------+
-| 0075b901445a732a5d6f299cbf9d14692b12f2724b9443d7b3740a62c7a81ab6 | severe fever,coughing,hard to breathe |                | 1585326226 |
-| 374ecfb7b0c437a3054e1b75f546faa8c07f81809a9a77ce5752bed1b1218ab7 | severe fever,coughing,hard to breathe |                | 1585325928 |
-| 601e2a74dd04f3ec8b29012cefb92975eb31b60015584c803a4c27746537c23e | severe fever,coughing,hard to breathe |                | 1585326038 |
-| 68883a2b8ea382397114376c9c099fdde6a18e4f9c9b35f1177a9e0010a7818f | severe fever,coughing,hard to breathe |                | 1585326764 |
-| 692ad09bf3adb0467f7b19ba4f28076a7de62b9235eb7495da0b57036162a586 | severe fever,coughing,hard to breathe |                | 1585326043 |
-| 6d68785abd6f99ea646fd7c775a14a36f7cec7635a76d3b5554908c6c3a09af5 | severe fever,coughing,hard to breathe |                | 1585326048 |
-| 7f9dcb9b89870384c91f19c7e07bce1b0bc6b63f9f331f64287d81367e7a82e8 | severe fever,coughing,hard to breathe |                | 1585326041 |
-| 80d96e77ba86ff1766e8b0e6086f3b9266e9edc5e5a87cc87cc222331ecc6de8 | severe fever,coughing,hard to breathe |                | 1585326891 |
-| c41c3715d23127a75d93e0275b476badace16193d5cf07eac7b256db18c37a00 | severe fever,coughing,hard to breathe |                | 1585326046 |
-| e6f6cc772d11270cbac9b6e6cb24c451dc54b54172547f9ce327e9b5c5961609 | severe fever,coughing,hard to breathe |                | 1585326035 |
-| ef932667e953f400ee0ea3b6bf70e463f6adf57f124673db71b34d9ca93b91e4 | severe fever,coughing,hard to breathe |                | 1585326239 |
-+------------------------------------------------------------------+---------------------------------------+----------------+------------+
-```
+*Update:* This is not robust. Because users can be individually identified through their queries, and, to a rough extent (as obfuscated by PIR), can discover what a user’s contacts are -- a significant privacy issue
 
-Implementation:
- - The `/cenreport` POST writes the raw CENReport to the `cenkeys` table (1-3 rows, with 1 row per week) and `CENReport` table (1 new row).
- - The `/cenkeys` GET endpoint reads just the `CENKeys` table, requiring the index.  
- - The `/cenreport` GET endpoint reads the join between the 2 tables with the CENKey.
+### Reporter Privacy: Users who send reports do not reveal information to users they did not come in contact with, and reveal only the time of contact to users they did come in contact with. Note that in practice, the timing alone may still be sufficient for their contact to learn their identity (e.g., if their contact was only around one other person at the time).
 
-It is expected that CDNs can replace this, with mobile applications
+Reporters will only send information to TCNs they observed. If TCN rebroadcast is prevented, this is a strong indicator of co-presence. Receivers can associate particular TCNs to the time and location they were at when they broadcast that TCN. 
 
-Importantly, no PII data is held in any table.
+## Abuse
 
-## Contributions to Go Server
+### Warning fatigue
 
-Great!  Join the CoEpi Slack channel and say hi to @sourabh, or email sourabh@wolk.com.
+is real and related to both warning frequency and user perceptions of accuracy. 
 
-* If you are an experienced Go person (channels, mutexes / concurrency) please consider extending this server to support infection reports.
+Abusive users can negatively affect warning accuracy by generating reports to every TCN they observe. Abuse need not be malicious, this could occur at-scale if a non trivial percentage of the user population reports out of worry or a desire to be overly helpful “just in case”. 
 
-* If you are an experienced iOS or Android person with a strong interest in Bluetooth Low Energy and want to do client-server bridge work, check out [app-ios](https://github.com/Co-Epi/app-ios) or [app-android](https://github.com/Co-Epi/app-android).
+Warning fatigue could also set in if the product is wildly successful, and a significant percentage of the population is indeed sick or at-risk. 
+
+### Denial of Service
+Abusive reporters can overwhelm the service by generating large numbers of artificial TCNs and uploading them. Fortunately, the service will expire them in 2 weeks, but we may want to cap, both the number of TCNs in an individual report, and the number of times a particular IP can generate reports. 
+
+Because this protocol preserves the privacy of the reporter, it is also possible to encrypt a large number of messages to the same TCN.  We may want to limit the number of messages encrypted to a particular TCN at the service layer to a small number between 1 and 10. 
+
+
