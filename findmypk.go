@@ -19,12 +19,6 @@ const (
 	defaultTmpDir  = "/tmp"
 )
 
-/*
-type Config struct {
-	MysqlConn string `json:"mysqlConn,omitempty"`
-}
-*/
-
 func main() {
 	tmpdir := os.Getenv("TMPDIR")
 	if tmpdir == "" {

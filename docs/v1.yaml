@@ -1,0 +1,96 @@
+openapi: 3.0.2
+info:
+  description: The Find My Public Key (FMPK) server powers a Bluetoot
+  version: 0.2.0
+  title: Find My Public Key (FMPK) Server
+  license:
+    name: OPEN COVID LICENSE 1.0
+    url: https://opencovidpledge.org/license/v1-0/
+
+servers:
+  - url: https://api.wolk.com
+    description: URL Endpoint used for dev/test
+
+paths:
+  /report:
+    post:
+      summary: Send private messages to recipients.
+      description: Users send encrypted messages (eg symptom / infection reports) with Hashes of their public keys to people they have come into close proximity with.  The Server is not made aware of the sender's public key, receivers public key or the content of the message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hashPublicKey:
+                  type: string
+                  description: Content of the infection report. Example, symptoms
+                encodedMsg:
+                  type: string
+                  description: Content of the infection report. Example, symptoms
+              required:
+                - hashPublicKey
+                - encodedMsg
+      responses:
+        '200':
+          description: The reports were submitted successfully
+        '400':
+          description: Request Parameter Invalid
+        '500':
+          description: Internal Server Error
+        default:
+          description: Unexpected Error
+
+  /query/{timestamp}:
+    post:
+      summary: Retrieve private messages
+      description: (eg symptom / infection reports) by querying by passing 3-byte (or 4-byte) prefixes of Hashes of public keys of people they have come into BLE contact with.  The Server is not made aware of the sender's public key, the receivers public key or the content of the message.
+      parameters:
+      - in: path
+        name: timestamp
+        description: Only reports after this timestamp will be returned, up to 1000-10000 records
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+        '400':
+          description: Request Parameter Invalid
+        '500':
+          description: Internal Server Error
+        default:
+          description: Unexpected Error
+
+# https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#referenceObject
+components:
+  schemas:
+    Report:
+      description: Report representing encrypted message between sender and recipient.
+      type: object
+      properties:
+        hashedPK:
+          type: string
+          format: bytes
+          description: Hash of recipient's public key
+          minLength: 32
+          maxLength: 64 #TODO: Discuss appropriate value and also a possibly an expected pattern (guid ?)
+        encodedMsg:
+          type: string
+          format: bytes
+          description: Protobuf of FindMyPKMemo representing symptoms and/or infection positive/negative result
+          minLength: 1
+          maxLength: 512
