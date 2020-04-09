@@ -219,8 +219,7 @@ Because this protocol preserves the privacy of the reporter, it is also possible
 This Find My Public Key API is used for _Privacy-Preserving Distributed Contact Tracing_, as used in FMPK Apps:
 * [findmypk-ios](https://github.com/wolkdb/findmypk-ios)
 * [findmypk-android](https://github.com/wolkdb/findmypk-android)
-* other applications following [FMPK Protocols](https://github.com/wolkdb/findmypk-server)
-TCN Coalition (https://tcn-coalition.org).
+* other applications following [FMPK Protocols](https://github.com/wolkdb/findmypk-server) within TCN Coalition (https://tcn-coalition.org).
 The TCN Coalition mission is to reduce transmission of disease, by developing applications and protocols that support contact tracing without loss of privacy (minimal identifiable information).  The Find My Public Key (FMPK) Protocol achieves this goal by combining Bluetooth Low Energy with servers holding no PII data and clients doing all matching.
 The flow is as follows:
 1. iOS/Android Apps broadcast `(pk, sig, memo)` using Bluetooth Low Energy (BLE) in specific Service / Characteristic ID
@@ -229,7 +228,7 @@ The flow is as follows:
 4. Apps poll periodically (hourly / daily) to `/query` for recent `Report` and matches them to `pk`s the user has observed, matching them locally.
 ## Active Endpoint
 * API Endpoint: (active) https://api.wolk.com
-* API Documentation in Postman: TBD
+* API Documentation in Postman: https://documenter.getpostman.com/view/10811660/SzYeww4L
 ### BigTable Setup
 1. Set up your BigTable instance in a Google Cloud project such as
 ```
