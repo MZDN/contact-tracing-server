@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS CENReport;
-DROP TABLE IF EXISTS CENSymptom;
+DROP TABLE IF EXISTS FMReport;
+DROP TABLE IF EXISTS FMSymptom;
 
-CREATE TABLE `CENSymptom` (
+CREATE TABLE `FMSymptom` (
 	   `reportID` varchar(64) DEFAULT "",
 	   `symptomID` int,
 	   `reportMimeType` varchar(64) DEFAULT "",
@@ -11,7 +11,7 @@ CREATE TABLE `CENSymptom` (
 	   KEY (`reportTS`)
 );
 
-CREATE TABLE `CENReport` (
+CREATE TABLE `FMReport` (
    `hashedPK`  varchar(64),
    `encodedMsg` varchar(512),
    `reportTS` int,
@@ -19,7 +19,3 @@ CREATE TABLE `CENReport` (
    PRIMARY KEY(`hashedPK`),
    KEY(`prefixHashedPK`)
 );
-
-
-
-

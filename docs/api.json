@@ -1,28 +1,28 @@
 {
 	"openapi": "3.0.0",
 	"info": {
-		"version": "v.0.2.0",
-		"title": "CEN",
+		"version": "v.0.1",
+		"title": "FindMyPk",
 		"license": {
 			"name": "MIT"
 		}
 	},
 	"servers": [{
-		"url": "https://cenapi.wolk.com:8080"
+		"url": "https://findmypk.wolk.com:8080"
 	}],
 	"paths": {
-		"/cenreport": {
+		"/fmreport": {
 			"post": {
 				"tags": [
 					"ble"
 				],
-				"summary": "POST REPORT with CEN Keys (submitted upon Recording Symptoms/Infections)",
+				"summary": "POST REPORT with FMKeys (submitted upon Recording Symptoms/Infections)",
 				"requestBody": {
-					"description": "When users report data in an app following the CEN protocol, the app sends a CENReport revealing symptoms/infection along with CENKeys",
+					"description": "When users report data in an app following the FindMyPk protocol, the app sends a FMReport revealing symptoms/infection along with CENKeys",
 					"content": {
 						"application/json": {
 							"schema": {
-								"$ref": "#/components/schemas/CENReport"
+								"$ref": "#/components/schemas/FMReport"
 							}
 						}
 					},
@@ -52,13 +52,13 @@
 				}
 			}
 		},
-		"/cenreport/{timestamp}": {
+		"/fmreport/{timestamp}": {
 			"get": {
 				"tags": [
 					"ble-core"
 				],
-				"summary": "CENKeys Check (periodic polling for newly posted keys)",
-				"description": "An app following the CEN protocol polls this endpoint every few minutes/hours for new CENKeys",
+				"summary": "FMKeys Check (periodic polling for newly posted keys)",
+				"description": "An app following the FindMyPk protocol polls this endpoint every few minutes/hours for new FMKeys",
 				"parameters": [
 					{
 						"name": "id",
@@ -101,23 +101,23 @@
 	},
 	"components": {
 		"schemas": {
-			"CENArray": {
+			"FMArray": {
 				"type": "array",
 				"properties": {
 						"type": "string"
 				}
 			},
-			"CENReport": {
+			"FMReport": {
 				"type": "object",
 				"required": [
 					"report",
-					"cenKeys"
+					"fmKeys"
 				],
 				"properties": {
 					"report": {
 						"type": "string"
 					},
-					"cenKeys": {
+					"fmKeys": {
 						"type": "string"
 					},
 					"reportMimeType": {

@@ -25,13 +25,13 @@ func NewBackend(conf *Config) (backend *Backend, err error) {
 		log.Printf("bigtable err %v\n", err)
 		return backend, err
 	}
-	backend.columnFamilyName = "CENReport"
-	backend.tableName = "CENReport"
+	backend.columnFamilyName = "FMReport"
+	backend.tableName = "FMReport"
 	backend.client = client
 	return backend, nil
 }
 
-func (backend *Backend) ProcessReport(reports []CENReport) (err error) {
+func (backend *Backend) ProcessReport(reports []FMReport) (err error) {
 
 	// when should open is called?
 	table := backend.client.Open(backend.tableName)
@@ -51,7 +51,7 @@ func (backend *Backend) ProcessReport(reports []CENReport) (err error) {
 	return err
 }
 
-func (backend *Backend) ProcessQuery(query []byte, timestamp int64) (reports []CENReport, err error) {
+func (backend *Backend) ProcessQuery(query []byte, timestamp int64) (reports []FMReport, err error) {
 	prefixkeys := make(bigtable.RowList, 0)
 	// TODO: split query into H(PK) prefixes
 	for q := 0; q < len(query); q += 3 {
@@ -72,7 +72,7 @@ func (backend *Backend) ProcessQuery(query []byte, timestamp int64) (reports []C
 		func(row bigtable.Row) bool {
 			//for columnFamily, cols := range row {
 			for _, cols := range row {
-				var report CENReport
+				var report FMReport
 				for _, col := range cols {
 					dt := strings.Split(col.Column, ":")
 					fmt.Println("dt", dt)

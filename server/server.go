@@ -23,14 +23,14 @@ const (
 	sslKeyFileName = "www.wolk.com.key"
 	caFileName     = "www.wolk.com.bundle"
 
-	// DefaultPort is the port which the CEN HTTP server is listening in on
+	// DefaultPort is the port which the FindMyPk HTTP server is listening in on
 	DefaultPort = "8080"
 
-	// EndpointCENReport is the name of the HTTP endpoint for GET/POST of CENReport
-	EndpointCENReport = "report"
+	// EndpointFMReport is the name of the HTTP endpoint for GET/POST of FMReport
+	EndpointFMReport = "report"
 
-	// EndpointCENKeys is the name of the HTTP endpoint for GET CenKeys
-	EndpointCENQuery = "query"
+	// EndpointFMQuery is the name of the HTTP endpoint for GET FMKeys
+	EndpointFMQuery = "query"
 )
 
 // Server manages HTTP connections
@@ -64,13 +64,13 @@ func NewServer(httpPort string, backend *backend.Backend) (s *Server, err error)
 func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	log.Println("getConnection")
-	if strings.Contains(r.URL.Path, EndpointCENReport) {
+	if strings.Contains(r.URL.Path, EndpointFMReport) {
 		if r.Method == http.MethodPost {
 			s.postReportHander(w, r)
 		} else {
 			s.homeHandler(w, r)
 		}
-	} else if strings.Contains(r.URL.Path, EndpointCENQuery) {
+	} else if strings.Contains(r.URL.Path, EndpointFMQuery) {
 		if r.Method == http.MethodPost {
 			s.postQueryHander(w, r)
 		} else {
@@ -136,7 +136,7 @@ func (s *Server) Start() (err error) {
 }
 
 func (s *Server) homeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("CEN API Server v0.2.1"))
+	w.Write([]byte("FindMyKey API Server v0.1"))
 }
 
 //POST /report
@@ -149,8 +149,8 @@ func (s *Server) postReportHander(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	// Parse body as CENReport
-	var payload []backend.CENReport
+	// Parse body as FMReport
+	var payload []backend.FMReport
 	err = json.Unmarshal(body, &payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

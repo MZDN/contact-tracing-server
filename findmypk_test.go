@@ -47,17 +47,17 @@ func httppost(url string, body []byte) (result []byte, err error) {
 	bodyReader := bytes.NewReader(body)
 	req, err := http.NewRequest(http.MethodPost, url, bodyReader)
 	if err != nil {
-		return result, fmt.Errorf("[cen_test:httppost] %s", err)
+		return result, fmt.Errorf("[findmypk_test:httppost] %s", err)
 	}
 
 	resp, err := httpclient.Do(req)
 	if err != nil {
-		return result, fmt.Errorf("[cen_test:httppost] %s", err)
+		return result, fmt.Errorf("[findmypk_test:httppost] %s", err)
 	}
 
 	result, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return result, fmt.Errorf("[cen_test:httppost] %s", err)
+		return result, fmt.Errorf("[findmypk_test:httppost] %s", err)
 	}
 	resp.Body.Close()
 
@@ -70,30 +70,30 @@ func httpget(url string) (result []byte, err error) {
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return result, fmt.Errorf("[cen_test:httpget] %s", err)
+		return result, fmt.Errorf("[findmypk_test:httpget] %s", err)
 	}
 
 	resp, err := httpclient.Do(req)
 	if err != nil {
-		return result, fmt.Errorf("[cen_test:httpget] %s", err)
+		return result, fmt.Errorf("[findmypk_test:httpget] %s", err)
 	}
 
 	result, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return result, fmt.Errorf("[cen_test:httpget] %s", err)
+		return result, fmt.Errorf("[findmypk_test:httpget] %s", err)
 	}
 	resp.Body.Close()
 
 	return result, nil
 }
 
-func TestCENSimple(t *testing.T) {
+func TestFMPKSimple(t *testing.T) {
 	hostname, err := os.Hostname()
 	if err != nil {
 	}
 	localendpoint := fmt.Sprintf("%s.wolk.com:%s", hostname, server.DefaultPort)
 
-	var reports []backend.CENReport
+	var reports []backend.FMReport
 	var hashKeys [][]byte
 	for i := 0; i < 10; i++ {
 		key := make([]byte, 16)
@@ -102,13 +102,13 @@ func TestCENSimple(t *testing.T) {
 		hashKeys = append(hashKeys, hashKey)
 		symptom := "sample symptom"
 
-		report := backend.CENReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
+		report := backend.FMReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
 		reports = append(reports, report)
 	}
-	cenReportJSON, err := json.Marshal(reports)
-	_, err = httppost(fmt.Sprintf("https://%s/%s", localendpoint, server.EndpointCENReport), cenReportJSON)
+	fmReportJSON, err := json.Marshal(reports)
+	_, err = httppost(fmt.Sprintf("https://%s/%s", localendpoint, server.EndpointFMReport), fmReportJSON)
 	if err != nil {
-		t.Fatalf("EndpointCENReport: %s", err)
+		t.Fatalf("EndpointFMReport: %s", err)
 	}
 
 	var prefixHashedKey []byte
@@ -120,15 +120,15 @@ func TestCENSimple(t *testing.T) {
 	prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
 	prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
 
-	result, err := httppost(fmt.Sprintf("https://%s/%s/%d", localendpoint, server.EndpointCENQuery, time.Now().Unix()), prefixHashedKey)
+	result, err := httppost(fmt.Sprintf("https://%s/%s/%d", localendpoint, server.EndpointFMQuery, time.Now().Unix()), prefixHashedKey)
 	if err != nil {
-		t.Fatalf("EndpointCENReport: %s", err)
+		t.Fatalf("EndpointFMReport: %s", err)
 	}
 
-	var resultreport []*backend.CENReport
+	var resultreport []*backend.FMReport
 	err = json.Unmarshal(result, &resultreport)
 	if err != nil {
-		t.Fatalf("EndpointCENReport(check1): %s", err)
+		t.Fatalf("EndpointFMReport(check1): %s", err)
 	}
 	for _, r := range resultreport {
 		if bytes.Compare(r.HashedPK, sampleKey) == 0 || bytes.Compare(r.HashedPK, sampleKey2) == 0 {
@@ -139,8 +139,8 @@ func TestCENSimple(t *testing.T) {
 	}
 }
 
-func TestCENLong(t *testing.T) {
-	var reports []backend.CENReport
+func TestFMPKLong(t *testing.T) {
+	var reports []backend.FMReport
 	var hashKeys [][]byte
 	key := make([]byte, 16)
 	msg := make([]byte, 128)
@@ -152,15 +152,15 @@ func TestCENLong(t *testing.T) {
 			hashKeys = append(hashKeys, hashKey)
 			rand.Read(msg)
 
-			report := backend.CENReport{HashedPK: hashKey, EncodedMsg: msg}
+			report := backend.FMReport{HashedPK: hashKey, EncodedMsg: msg}
 			reports = append(reports, report)
 		}
-		cenReportJSON, err := json.Marshal(reports)
+		fmReportJSON, err := json.Marshal(reports)
 		timeReportStart := time.Now()
-		_, err = httppost(fmt.Sprintf("https://%s/%s", endpoint, server.EndpointCENReport), cenReportJSON)
+		_, err = httppost(fmt.Sprintf("https://%s/%s", endpoint, server.EndpointFMReport), fmReportJSON)
 		fmt.Printf("request %d time %v\n", reportNum, time.Since(timeReportStart))
 		if err != nil {
-			t.Fatalf("EndpointCENReport: %s", err)
+			t.Fatalf("EndpointFMReport: %s", err)
 		}
 	}
 	fmt.Printf("request totaltime = %v\n", time.Since(timeStart))
@@ -177,16 +177,16 @@ func TestCENLong(t *testing.T) {
 		prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
 
 		queryTimeStart := time.Now()
-		result, err := httppost(fmt.Sprintf("https://%s/%s/%d", endpoint, server.EndpointCENQuery, time.Now().Unix()), prefixHashedKey)
+		result, err := httppost(fmt.Sprintf("https://%s/%s/%d", endpoint, server.EndpointFMQuery, time.Now().Unix()), prefixHashedKey)
 		fmt.Printf("query %d time %v\n", queryNum, time.Since(queryTimeStart))
 		if err != nil {
-			t.Fatalf("EndpointCENReport: %s", err)
+			t.Fatalf("EndpointFMReport: %s", err)
 		}
 
-		var resultreport []*backend.CENReport
+		var resultreport []*backend.FMReport
 		err = json.Unmarshal(result, &resultreport)
 		if err != nil {
-			t.Fatalf("EndpointCENReport(check1): %s", err)
+			t.Fatalf("EndpointFMReport(check1): %s", err)
 		}
 		for _, r := range resultreport {
 			if bytes.Compare(r.HashedPK, sampleKey) == 0 || bytes.Compare(r.HashedPK, sampleKey2) == 0 {

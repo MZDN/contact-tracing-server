@@ -45,7 +45,7 @@ func TestEncryption(t *testing.T) {
 	fmt.Printf("Decrypted:%v len(RawMsg)=%d, len(EncMsg)=%d\n", string(decrypted), len(msg), len(encrypted))
 }
 
-func TestCENReport(t *testing.T) {
+func TestFMReport(t *testing.T) {
 
 	fmt.Printf("--ECC Parameters--\n")
 	fmt.Printf(" Name: %s\n", elliptic.P256().Params().Name)
@@ -71,11 +71,8 @@ func TestCENReport(t *testing.T) {
 		panic("session secret mismatch!")
 	}
 
-	//memo := []byte("high fever, dry cough,hard to breathe")
-	//memo := &Memo{ReportType: 1, DiseaseID: 2, SymptomID: []int32{5, 7, 123}}
-
 	//Step 1.a - A sends these bytes: [PK_A(t), siga, memoA] to B
-	memoA := &Memo{ReportType: 0, DiseaseID: 0, SymptomID: []int32{7}}
+	memoA := &FindMyPKMemo{ReportType: 0, DiseaseID: 0, SymptomID: []int32{7}}
 	memoByteA := memoA.Bytes()
 	sigA, err := Sign(sPriv, memoByteA)
 	if err != nil {
@@ -87,11 +84,11 @@ func TestCENReport(t *testing.T) {
 		panic(err)
 	}
 	fmt.Printf("\nVerified: vmemoByteA=[%x]\n", vmemoByteA)
-	vMemoA := FromMemoByte(vmemoByteA)
+	vMemoA := ByteToFindMyPKMemo(vmemoByteA)
 	fmt.Printf("\nDecrypted Msg: {reportType=%v, vmemoByteA=[%s]} (msg=[%x])\n", vMemoA.GetReportType(), vMemoA.String(), vmemoByteA)
 
 	//Step 1.b - B sends these bytes: [PK_B(t), sigb, memoB] to A
-	memoB := &Memo{ReportType: 0, DiseaseID: 0}
+	memoB := &FindMyPKMemo{ReportType: 0, DiseaseID: 0}
 	memoByteB := memoB.Bytes()
 	sigB, err := Sign(sPriv, memoByteB)
 	if err != nil {
@@ -103,16 +100,16 @@ func TestCENReport(t *testing.T) {
 		panic(err)
 	}
 	fmt.Printf("\nVerified: vmemoByteB=[%x]\n", vmemoByteB)
-	vMemoB := FromMemoByte(vmemoByteB)
+	vMemoB := ByteToFindMyPKMemo(vmemoByteB)
 	fmt.Printf("\nDecrypted Msg: {reportType=%v, vmemoByteB=[%s]} (msg=[%x])\n", vMemoB.GetReportType(), vMemoB.String(), vmemoByteB)
 
-	//Step2 - Encryption. A is sick and computes EncodedMsg following a protobuf serialization scheme within a CENReport R using (1b)'s PK_B(t)
-	memoS := &Memo{ReportType: 1, DiseaseID: 2, SymptomID: []int32{5, 7, 123}}
+	//Step2 - Encryption. A is sick and computes EncodedMsg following a protobuf serialization scheme within a FMReport R using (1b)'s PK_B(t)
+	memoS := &FindMyPKMemo{ReportType: 1, DiseaseID: 2, SymptomID: []int32{5, 7, 123}}
 	memoByteS, err := proto.Marshal(memoS)
 	if err != nil {
 		log.Fatal("marshaling error: ", err)
 	}
-	report, err := MakeCENReport(rPub, sPriv, memoByteS)
+	report, err := MakeFMReport(rPub, sPriv, memoByteS)
 	if err != nil {
 		panic(err)
 	}
@@ -122,21 +119,21 @@ func TestCENReport(t *testing.T) {
 	}
 	fmt.Printf("\nreport: %v\n", string(r))
 
-	//A's report, which is included in reports []CENReport sent to ProcessReport
-	//TODO: backend.ProcessReport([]CENReport{report})
+	//A's report, which is included in reports []FMReport sent to ProcessReport
+	//TODO: backend.ProcessReport([]FMReport{report})
 
-	//Step3.a - Decryption. B queries a report by hitting ProcessQuery(query []byte, timestamp uint64) and getting back reports []CENReport one of which contains R of Step2
+	//Step3.a - Decryption. B queries a report by hitting ProcessQuery(query []byte, timestamp uint64) and getting back reports []FMReport one of which contains R of Step2
 	//TODO: backend.ProcessQuery(query []byte, timestamp uint64)
 
 	//Step3.b - B filter query with seen map[hashedPk](pub,rss).
 	//TODO: B filter query with seen map[hashedPk](pub,rss)
 
 	//Step3.c - B Then uses recipient session secret generate by (1a)'s PK_A(t) to decode to the memo, following a protobuf deserialization scheme
-	dmemoByteS, err := DecryptCENReport(report, rss[:])
+	dmemoByteS, err := DecryptFMReport(report, rss[:])
 	if err != nil {
 		panic(err)
 	}
-	vMemoS := &Memo{}
+	vMemoS := &FindMyPKMemo{}
 	err = proto.Unmarshal(dmemoByteS, vMemoS)
 	if err != nil {
 		log.Fatal("unmarshaling error: ", err)

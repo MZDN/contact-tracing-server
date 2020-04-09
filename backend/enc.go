@@ -146,15 +146,15 @@ func Decrypt(ss []byte, cipherText []byte) ([]byte, error) {
 	return plainText, nil
 }
 
-// MakeCENReport generate the cenReport using rPub, sPriv, memoByte
-func MakeCENReport(rPub *ecdsa.PublicKey, sPriv *ecdsa.PrivateKey, memoByte []byte) (report CENReport, err error) {
+// MakeFMReport generate the fmReport using rPub, sPriv, memoByte
+func MakeFMReport(rPub *ecdsa.PublicKey, sPriv *ecdsa.PrivateKey, memoByte []byte) (report FMReport, err error) {
 	ss := GenerateSessionSecret(rPub, sPriv)
 	encrypted, err := Encrypt(ss[:], memoByte)
 	if err != nil {
 		return report, err
 	}
 	hashedPK := Computehash(FromECDSAPub(rPub))
-	report = CENReport{HashedPK: hashedPK, EncodedMsg: encrypted}
+	report = FMReport{HashedPK: hashedPK, EncodedMsg: encrypted}
 	return report, nil
 }
 
@@ -165,8 +165,8 @@ func GenerateSessionSecret(rPub *ecdsa.PublicKey, sPriv *ecdsa.PrivateKey) [32]b
 	return ss
 }
 
-// DecryptCENReport decrypts CENReport using session secret. Should be invoked only if hashedPK we found
-func DecryptCENReport(report CENReport, ss []byte) (memoByte []byte, err error) {
+// DecryptFMReport decrypts FMReport using session secret. Should be invoked only if hashedPK we found
+func DecryptFMReport(report FMReport, ss []byte) (memoByte []byte, err error) {
 	cipherText := report.EncodedMsg
 	if memoByte, err = Decrypt(ss, cipherText); err != nil {
 		return memoByte, err
@@ -174,7 +174,7 @@ func DecryptCENReport(report CENReport, ss []byte) (memoByte []byte, err error) 
 	return memoByte, err
 }
 
-func (m *Memo) Bytes() (mbyte []byte) {
+func (m *FindMyPKMemo) Bytes() (mbyte []byte) {
 	mByte, err := proto.Marshal(m)
 	if err != nil {
 		log.Fatal("marshaling error: ", err)
@@ -183,8 +183,8 @@ func (m *Memo) Bytes() (mbyte []byte) {
 	return mByte
 }
 
-func FromMemoByte(mbyte []byte) (m *Memo) {
-	m = &Memo{}
+func ByteToFindMyPKMemo(mbyte []byte) (m *FindMyPKMemo) {
+	m = &FindMyPKMemo{}
 	err := proto.Unmarshal(mbyte, m)
 	if err != nil {
 		log.Fatal("unmarshaling error: ", err)

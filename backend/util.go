@@ -18,7 +18,7 @@ func Computehash(data ...[]byte) []byte {
 	return hasher.Sum(nil)
 }
 
-func makeCENKeyString() string {
+func makeFMKeyString() string {
 	key := make([]byte, 16)
 	rand.Read(key)
 	encoded := fmt.Sprintf("%x", key)

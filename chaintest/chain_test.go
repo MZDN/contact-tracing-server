@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	defaultSteps  = 4 * 24 * 30 // CENs every 15 mins, 30 days = 2880
-	defaultSteps2 = 6 * 24 * 10 // CENs every 10 mins, 14 days = 1440
+	defaultSteps  = 4 * 24 * 30 // FindMyPks every 15 mins, 30 days = 2880
+	defaultSteps2 = 6 * 24 * 10 // FindMyPks every 10 mins, 14 days = 1440
 )
 
 func DefaultModulus() *big.Int {

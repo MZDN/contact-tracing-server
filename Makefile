@@ -3,13 +3,13 @@
 GOBIN = $(shell pwd)/bin
 GO ?= latest
 
-cen:
-		go build -o bin/cen
-		@echo "Done building cen.  Run \"$(GOBIN)/cen\" to launch cen."
+findmypk:
+		go build -o bin/findmypk
+		@echo "Done building FindMyPk!  Run \"$(GOBIN)/findmypk\" to launch findmypk."
 
-docker: 
-	docker build --force-rm -t gcr.io/us-west1-wlk/wolkinc/cen-mm .
-	gcloud docker -- push gcr.io/us-west1-wlk/wolkinc/cen-mm:latest
+docker:
+	docker build --force-rm -t gcr.io/us-west1-wlk/wolkinc/findmypk-mm .
+	gcloud docker -- push gcr.io/us-west1-wlk/wolkinc/findmypk-mm:latest
 
 createcluster:
 	-make createips
@@ -40,19 +40,19 @@ createpvcs:
 	kubectl apply -f ./build/yaml/pvc.yaml
 
 getpvcs:
-	kubectl get pvc cen
+	kubectl get pvc findmypk
 
 deletepvcs:
-	kubectl delete pvc cen
+	kubectl delete pvc findmypk
 
 createservices:
 	kubectl apply -f ./build/yaml/service.yaml
 
 getservices:
-	kubectl get services cen
+	kubectl get services findmypk
 
 deleteservices:
-	kubectl delete service cen
+	kubectl delete service findmypk
 
 createpods:
 	kubectl apply -f ./build/yaml/deploy.yaml
@@ -61,10 +61,10 @@ getpods:
 	kubectl get pods
 
 getpod:
-	kubectl describe pod cen
+	kubectl describe pod findmypk
 
 deletepods:
-	kubectl delete deployment cen
+	kubectl delete deployment findmypk
 
 restartpod:
 	kubectl delete -f ./build/yaml/$(POD)-cloudstore.yml --namespace=$(NAMESPACE) --kubeconfig=/root/.kube/$(CLUSTER)
@@ -75,7 +75,7 @@ pods:
 	make createpods
 
 sshpod:
-	kubectl exec -it `kubectl get pods | grep cen | awk '{print $$1}'` -- bash
+	kubectl exec -it `kubectl get pods | grep findmypk | awk '{print $$1}'` -- bash
 
 createips:
 	# get the ips from google
@@ -98,4 +98,3 @@ createnamespace:
 
 getnamespace:
 	kubectl get namespaces --show-labels  --kubeconfig=/root/.kube/cw
-

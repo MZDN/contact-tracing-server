@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	version        = "0.2"
-	configFileName = "cen.conf"
+	version        = "0.1"
+	configFileName = "fmpk.conf"
 	defaultTmpDir  = "/tmp"
 )
 
@@ -43,7 +43,7 @@ func main() {
 		port = server.DefaultPort
 	}
 
-	cenbackend, err := backend.NewBackend(conf)
+	findMyPkBackend, err := backend.NewBackend(conf)
 	if err != nil {
 	}
 	/*
@@ -55,12 +55,12 @@ func main() {
 	*/
 
 	//s, err := server.NewServer(port, *mysqlConnectionString)
-	s, err := server.NewServer(port, cenbackend)
+	s, err := server.NewServer(port, findMyPkBackend)
 	if err != nil {
 		panic(err)
 	}
 	s.Start()
-	log.Printf("CEN Server v%s - Listening on port %s...\n", version, port)
+	log.Printf("FindMyPk Server v%s - Listening on port %s...\n", version, port)
 	for {
 	}
 }

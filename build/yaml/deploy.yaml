@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cen
+  name: findmypk
   labels:
-    app: cen
+    app: findmypk
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: cen
+      app: findmypk
   template:
     metadata:
       labels:
-        app: cen
+        app: findmypk
     spec:
       containers:
-      - name: cen
-        image: gcr.io/us-west1-wlk/wolkinc/cen-mm:latest
+      - name: findmypk
+        image: gcr.io/us-west1-wlk/wolkinc/findmypk-mm:latest
         ports:
         - containerPort: 8080

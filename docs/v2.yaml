@@ -1,22 +1,22 @@
 openapi: 3.0.2
 info:
-  description: This is the API model for CoEpi Server
-  version: 0.2.0
-  title: CoEpi Server
+  description: This is the API model for FindMyPk Server
+  version: 0.1
+  title: FindMyPk Server
   license:
-    name: MIT License
+    name: COVID License
     url: https://github.com/Co-Epi/data-models/blob/master/LICENSE
-    
+
 servers:
   - url: https://coepi.wolk.com:8080
     description: URL Endpoint used for dev/test
-    
+
 paths:
-  /cenreport:
+  /fmreport:
     post:
       summary: Submit symptom or infection report
-      description: Users submit symptom / infection reports and reveal the secret CENKey in their application
-      
+      description: Users submit symptom / infection reports and reveal the secret FMKey in their application
+
       requestBody:
         required: true
         content:
@@ -30,18 +30,18 @@ paths:
                 report:
                   type: string
                   description: Content of the infection report. Example, symptoms
-                cenKeys:
+                fmKeys:
                   type: array
                   items:
-                    $ref: '#/components/schemas/CenKey'
+                    $ref: '#/components/schemas/FMKey'
                   minItems: 1
                   maxItems: 10 # TODO: Discuss appropriate value
-                  uniqueItems: true 
+                  uniqueItems: true
               required:
                 - reportId
                 - report
-                - cenKeys
-                
+                - fmKeys
+
       responses:
         '200':
           description: The report was submitted successfully
@@ -51,19 +51,19 @@ paths:
           description: Internal Server Error
         default:
           description: Unexpected Error
-  
-  
-  /cenreport/{cenkey}: # Suggestion: Should we allow passing a list of CEN keys to reduce roundtrips ?
+
+
+  /fmreport/{fmkey}: # Suggestion: Should we allow passing a list of fmkeys to reduce roundtrips ?
     get:
-      summary: Returns a list of reports associated with a CEN Key
+      summary: Returns a list of reports associated with a fmkey
       parameters:
       - in: path
-        name: cenkey
-        description: CEN Key for which we need to query the reports
+        name: fmkey
+        description:  fmKey for which we need to query the reports
         required: true
         schema:
-          $ref: '#/components/schemas/CenKey'
-      
+          $ref: '#/components/schemas/FMKey'
+
       responses:
         '200':
           description: OK
@@ -76,16 +76,16 @@ paths:
         '400':
           description: Request Parameter Invalid # TBD
         '401':
-          description: CEN Key not found
+          description: FM Key not found
         '500':
           description: Internal Server Error
         default:
           description: Unexpected Error
-      
-          
-  /cenkeys/{timestamp}:
+
+
+  /fmkeys/{timestamp}:
     get:
-      summary: Returns all cenKeys generated between the range [timestamp - 3600, timestamp) # TBD
+      summary: Returns all fmKeys generated between the range [timestamp - 3600, timestamp) # TBD
       parameters:
       - in: path
         name: timestamp
@@ -93,7 +93,7 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Timestamp'
-          
+
       responses:
         '200':
           description: OK
@@ -102,24 +102,24 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/CenKey'
+                  $ref: '#/components/schemas/fmKey'
         '400':
           description: Request Parameter Invalid # TBD
         '500':
           description: Internal Server Error
         default:
           description: Unexpected Error
-                
-        
-# https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#referenceObject          
+
+
+# https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md#referenceObject
 components:
   schemas:
-    CenKey:
-      description: Contact Event Number (CEN) published by the mobile device
+    fmKey:
+      description: published by the mobile device
       type: string
       minLength: 5 #TODO: Discuss appropriate value
       maxLength: 100 #TODO: Discuss appropriate value and also a possibly an expected pattern
-    
+
     Report:
       description: Infection report representing symptoms and/or positive infection incident
       type: object
@@ -136,9 +136,8 @@ components:
           maxLength: 10000
         timestamp:
           $ref: '#/components/schemas/Timestamp'
-      
+
     Timestamp:
       type: integer
       description: Timestamp in unix epoch format. It is the number of seconds that have elapsed since the Unix epoch, that is the time 00:00:00 UTC on 1 January 1970, minus leap seconds.
       minimum: 0
-  
