@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
 	"testing"
+	"time"
 
 	"crypto/rand"
 
@@ -61,47 +63,48 @@ func TestFMReport(t *testing.T) {
 	sPub := &sPriv.PublicKey
 
 	fmt.Printf("\nPrivate key (sender) %x", sPriv.D)
-	fmt.Printf("\nPublic key (sender) %x (%x %x)\n", FromECDSAPub(sPub), sPub.X, sPub.Y)
-	fmt.Printf("\nPublic key (recipient) %x (%x,%x)\n", FromECDSAPub(rPub), rPub.X, rPub.Y)
+	fmt.Printf("\nPublic key A (sender) %x (%x %x)\n", FromECDSAPub(sPub), sPub.X, sPub.Y)
+	fmt.Printf("\nPublic key B (recipient) %x (%x,%x)\n", FromECDSAPub(rPub), rPub.X, rPub.Y)
+
+	synctime := time.Now().Unix() // The time both A and B seen each other
+	synctimeByte := make([]byte, 8)
+	binary.LittleEndian.PutUint64(synctimeByte, uint64(synctime))
 
 	sss := GenerateSessionSecret(rPub, sPriv) //sender generated ss
 	rss := GenerateSessionSecret(sPub, rPriv) //recipient generated ss
-	fmt.Printf("\nsession secret: [sss=%x] [rss=%x] \n", sss, rss)
+	fmt.Printf("\nsession secret: \n[sss=%x]\n[rss=%x]\nSync Time:%d\n", sss, rss, synctime)
 	if !bytes.Equal(sss[:], rss[:]) {
 		panic("session secret mismatch!")
 	}
 
-	//Step 1.a - A sends these bytes: [PK_A(t), siga, memoA] to B
-	memoA := &FindMyPKMemo{ReportType: 0, DiseaseID: 0, SymptomID: []int32{7}}
-	memoByteA := memoA.Bytes()
-	sigA, err := Sign(sPriv, memoByteA)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("\nSigned: memoByteA=[%x]\nsigA=%x\n", memoByteA, sigA)
-	vmemoByteA, err := VerifySign(sigA)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("\nVerified: vmemoByteA=[%x]\n", vmemoByteA)
-	vMemoA := ByteToFindMyPKMemo(vmemoByteA)
-	fmt.Printf("\nDecrypted Msg: {reportType=%v, vmemoByteA=[%s]} (msg=[%x])\n", vMemoA.GetReportType(), vMemoA.String(), vmemoByteA)
+	//Step 1.a - A sends msgA with these bytes: [PK_A(t), siga, ts] to B
+	//memoA := &FindMyPKMemo{ReportType: 0, DiseaseID: 0, SymptomID: []int32{7}}
+	fmt.Printf("\nA Signed msgA with synctimeByte=[%x](%d)\n", synctimeByte, synctime)
 
-	//Step 1.b - B sends these bytes: [PK_B(t), sigb, memoB] to A
-	memoB := &FindMyPKMemo{ReportType: 0, DiseaseID: 0}
-	memoByteB := memoB.Bytes()
-	sigB, err := Sign(sPriv, memoByteB)
+	msgA, err := Sign(sPriv, synctimeByte)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("\nSigned: memoByteB=[%x]\nsigB=%x\n", memoByteB, sigB)
-	vmemoByteB, err := VerifySign(sigB)
+	fmt.Printf("\nmsgA=(prefix,pk,sig,ts)=%x\n", msgA)
+	DecryptedCiphertextA, err := VerifySign(msgA)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("\nVerified: vmemoByteB=[%x]\n", vmemoByteB)
-	vMemoB := ByteToFindMyPKMemo(vmemoByteB)
-	fmt.Printf("\nDecrypted Msg: {reportType=%v, vmemoByteB=[%s]} (msg=[%x])\n", vMemoB.GetReportType(), vMemoB.String(), vmemoByteB)
+	fmt.Printf("\nB Verified msgA: DecryptedCiphertextA=[%x](%d)\n", DecryptedCiphertextA, int64(binary.LittleEndian.Uint64(DecryptedCiphertextA)))
+
+	//Step 1.b - B sends msgB with these bytes: [PK_B(t), sigb, ts] to A
+	fmt.Printf("\nB Signed msgB with synctimeByte=[%x](%d)\n", synctimeByte, synctime)
+
+	msgB, err := Sign(rPriv, synctimeByte)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("\nmsgB=(prefix,pk,sig,ts)=%x\n", msgB)
+	DecryptedCiphertextB, err := VerifySign(msgB)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("\nA Verified msgB: DecryptedCiphertextB=[%x](%d)\n", DecryptedCiphertextB, int64(binary.LittleEndian.Uint64(DecryptedCiphertextB)))
 
 	//Step2 - Encryption. A is sick and computes EncodedMsg following a protobuf serialization scheme within a FMReport R using (1b)'s PK_B(t)
 	memoS := &FindMyPKMemo{ReportType: 1, DiseaseID: 2, SymptomID: []int32{5, 7, 123}}
@@ -109,6 +112,7 @@ func TestFMReport(t *testing.T) {
 	if err != nil {
 		log.Fatal("marshaling error: ", err)
 	}
+	fmt.Printf("\nA Made report for B(pub=%x)\nencoded memo:%x\n", FromECDSAPub(sPub), memoByteS)
 	report, err := MakeFMReport(rPub, sPriv, memoByteS)
 	if err != nil {
 		panic(err)
@@ -117,7 +121,7 @@ func TestFMReport(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("\nreport: %v\n", string(r))
+	fmt.Printf("\nA submitted report for B: %v\n", string(r))
 
 	//A's report, which is included in reports []FMReport sent to ProcessReport
 	//TODO: backend.ProcessReport([]FMReport{report})
@@ -129,6 +133,8 @@ func TestFMReport(t *testing.T) {
 	//TODO: B filter query with seen map[hashedPk](pub,rss)
 
 	//Step3.c - B Then uses recipient session secret generate by (1a)'s PK_A(t) to decode to the memo, following a protobuf deserialization scheme
+	fmt.Printf("\nB decrypting report from A using session secret(rss=%x)\n", rss[:])
+
 	dmemoByteS, err := DecryptFMReport(report, rss[:])
 	if err != nil {
 		panic(err)
@@ -138,5 +144,5 @@ func TestFMReport(t *testing.T) {
 	if err != nil {
 		log.Fatal("unmarshaling error: ", err)
 	}
-	fmt.Printf("\nDecrypted Memo: {reportType=%v, vMemoS=[%s]} (msg=[%x])\n", vMemoS.GetReportType(), vMemoS.String(), dmemoByteS)
+	fmt.Printf("\nB Decrypted Memo from A: {reportType=%v, vMemoS=[%s]} \nDecrypted memoByte=[%x])\n", vMemoS.GetReportType(), vMemoS.String(), dmemoByteS)
 }

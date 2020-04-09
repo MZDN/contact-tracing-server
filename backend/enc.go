@@ -20,7 +20,7 @@ const (
 	PrefixSize      = 3
 	PublicKeyPrefix = 0
 	RawSigPrefix    = 1
-	MemoPrefix      = 2
+	MPrefix         = 2
 )
 
 // ECDSASignature storing R,S for DER?
@@ -51,7 +51,7 @@ func ByteToPublicKey(pubByte []byte) (*ecdsa.PublicKey, error) {
 	return &pub, nil
 }
 
-// Sign uses the private key to sign a memo m
+// Sign uses the private key to sign a msg m
 func Sign(priv *ecdsa.PrivateKey, m []byte) ([]byte, error) {
 	r, s, err := ecdsa.Sign(rand.Reader, priv, m)
 	if err != nil {
@@ -66,9 +66,9 @@ func Sign(priv *ecdsa.PrivateKey, m []byte) ([]byte, error) {
 	prefix := make([]byte, PrefixSize)
 	prefix[PublicKeyPrefix] = byte(len(pubkey))
 	prefix[RawSigPrefix] = byte(len(signed))
-	prefix[MemoPrefix] = byte(len(m))                            // prefix[len(pkey),len(sig),len(m)]
-	sigWithPubkeyMemo := append(append(pubkey, signed...), m...) // [PK, sig, memo]
-	fullsig := append(prefix, sigWithPubkeyMemo...)              // [prefix,PK, sig, memo]
+	prefix[MPrefix] = byte(len(m))                           // prefix[len(pkey),len(sig),len(m)]
+	sigWithPkandM := append(append(pubkey, signed...), m...) // [PK, sig, m]
+	fullsig := append(prefix, sigWithPkandM...)              // [prefix,PK, sig, m]
 	fmt.Printf("\n[pk=%d,sig=%d,m=%d]\npk=%x\nsig=%x\nm=%x\n", len(pubkey), len(signed), len(m), pubkey, signed, m)
 	return fullsig, nil
 }
@@ -81,15 +81,15 @@ func VerifySign(signature []byte) ([]byte, error) {
 
 	sigWithPubkeyMemo := signature[PrefixSize:]
 
-	pubByte := sigWithPubkeyMemo[:pubKeySize] // PK of [PK, sig, memo]
+	pubByte := sigWithPubkeyMemo[:pubKeySize] // PK of [PK, sig, m]
 	pub, err := ByteToPublicKey(pubByte)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("\nPublic key %x (%x %x)\n", FromECDSAPub(pub), pub.X, pub.Y)
+	//fmt.Printf("\nPublic key %x (%x %x)\n", FromECDSAPub(pub), pub.X, pub.Y)
 
 	signed := sigWithPubkeyMemo[pubKeySize : pubKeySize+rawSigSize] // sig of [PK, sig, memo]
-	fmt.Printf("\nrawsig=%x ,len(rawsig)=%d\n", signed, len(signed))
+	//fmt.Printf("\nrawsig=%x ,len(rawsig)=%d\n", signed, len(signed))
 	rawsig := &ECDSASignature{}
 	_, err = asn1.Unmarshal(signed, rawsig)
 	if err != nil {
