@@ -12,6 +12,7 @@ import (
 
 type Backend struct {
 	client           *bigtable.Client
+	table            *bigtable.Table
 	tableName        string
 	columnFamilyName string
 }
@@ -28,26 +29,30 @@ func NewBackend(conf *Config) (backend *Backend, err error) {
 	backend.columnFamilyName = "report"
 	backend.tableName = "report"
 	backend.client = client
+	backend.table = backend.client.Open(backend.tableName)
 	return backend, nil
 }
 
 func (backend *Backend) ProcessReport(reports []FMReport) (err error) {
 
-	// when should open is called?
-	table := backend.client.Open(backend.tableName)
-
 	timestamp := bigtable.Now()
+	var keys []string
+	var muts []*bigtable.Mutation
 	for _, report := range reports {
-		PrefixHashedKey := report.HashedPK[:3]
+		prefixHashedKey := fmt.Sprintf("%x", report.HashedPK[:3])
+		keys = append(keys, prefixHashedKey)
 		mut := bigtable.NewMutation()
 		mut.Set(backend.columnFamilyName, "EncodedMsg", timestamp, report.EncodedMsg)
 		mut.Set(backend.columnFamilyName, "HashedPK", timestamp, report.HashedPK)
-		err = table.Apply(context.Background(), fmt.Sprintf("%x", PrefixHashedKey), mut)
-		if err != nil {
-			log.Println("ProcessReport:bigTable Apply Error", err)
-		}
+		muts = append(muts, mut)
 	}
-
+	//up to a max of 100,000
+	errs, err := backend.table.ApplyBulk(context.Background(), keys, muts)
+	if err != nil {
+		log.Printf("backend.table.ApplyBulk err %v %v\n", errs, err)
+	} else {
+		log.Printf("backend.table.ApplyBulk uploaded %d\n", len(keys))
+	}
 	return err
 }
 
