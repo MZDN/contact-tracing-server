@@ -114,11 +114,17 @@ func TestCENSimple(t *testing.T) {
 	var prefixHashedKey []byte
 	sampleKey := hashKeys[3]
 	sampleKey2 := hashKeys[6]
-	prefixHashedKey = append(prefixHashedKey, sampleKey[0])
-	prefixHashedKey = append(prefixHashedKey, sampleKey[1])
-	prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
-	prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
-	prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+	prefixSampleKey := sampleKey[:3]
+	prefixSampleKey2 := sampleKey2[:3]
+	prefixHashedKey = append(prefixHashedKey, prefixSampleKey...)
+	prefixHashedKey = append(prefixHashedKey, prefixSampleKey2...)
+	/*
+		prefixHashedKey = append(prefixHashedKey, sampleKey[0])
+		prefixHashedKey = append(prefixHashedKey, sampleKey[1])
+		prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
+		prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
+		prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+	*/
 
 	result, err := httppost(fmt.Sprintf("https://%s/%s/%d", localendpoint, server.EndpointCENQuery, time.Now().Unix()), prefixHashedKey)
 	if err != nil {
@@ -134,7 +140,7 @@ func TestCENSimple(t *testing.T) {
 		if bytes.Compare(r.HashedPK, sampleKey) == 0 || bytes.Compare(r.HashedPK, sampleKey2) == 0 {
 			fmt.Println("ok")
 		} else {
-			fmt.Println("err")
+			fmt.Printf("err r.HashedPK = %x sampleKey = %x\n", r.HashedPK, sampleKey)
 		}
 	}
 }
@@ -170,27 +176,33 @@ func TestCENLong(t *testing.T) {
 		var prefixHashedKey []byte
 		sampleKey := hashKeys[rand.Intn(100)]
 		sampleKey2 := hashKeys[rand.Intn(100)]
-		prefixHashedKey = append(prefixHashedKey, sampleKey[0])
-		prefixHashedKey = append(prefixHashedKey, sampleKey[1])
-		prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
-		prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
-		prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+		/*
+			prefixHashedKey = append(prefixHashedKey, sampleKey[0])
+			prefixHashedKey = append(prefixHashedKey, sampleKey[1])
+			prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
+			prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
+			prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+		*/
+		prefixSampleKey := sampleKey[:3]
+		prefixSampleKey2 := sampleKey2[:3]
+		prefixHashedKey = append(prefixHashedKey, prefixSampleKey...)
+		prefixHashedKey = append(prefixHashedKey, prefixSampleKey2...)
 
 		queryTimeStart := time.Now()
-		result, err := httppost(fmt.Sprintf("https://%s/%s/%d", endpoint, server.EndpointCENQuery, time.Now().Unix()), prefixHashedKey)
+		result, err := httppost(fmt.Sprintf("https://%s/%s/%d", endpoint, server.EndpointCENQuery, timeStart.Unix()), prefixHashedKey)
 		fmt.Printf("query %d time %v\n", queryNum, time.Since(queryTimeStart))
 		if err != nil {
 			t.Fatalf("EndpointCENReport: %s", err)
 		}
 
-		var resultreport []*backend.CENReport
+		var resultreport []backend.CENReport
 		err = json.Unmarshal(result, &resultreport)
 		if err != nil {
 			t.Fatalf("EndpointCENReport(check1): %s", err)
 		}
 		for _, r := range resultreport {
 			if bytes.Compare(r.HashedPK, sampleKey) == 0 || bytes.Compare(r.HashedPK, sampleKey2) == 0 {
-				//fmt.Println("ok")
+				//	fmt.Println("ok")
 			} else {
 				fmt.Println("err")
 			}
