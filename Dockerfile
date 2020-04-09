@@ -6,5 +6,5 @@ COPY certs/www.wolk.com.bundle /tmp/
 COPY conf/fmpk.conf /tmp/
 ENV PORT 8080
 ENV SSLDIR /tmp
-ENV TMPDIR /tmp
+ENV FMPKDIR /tmp
 CMD ["./findmypk"]

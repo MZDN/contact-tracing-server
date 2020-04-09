@@ -232,8 +232,8 @@ The flow is as follows:
 ### BigTable Setup
 1. Set up your BigTable instance in a Google Cloud project such as
 ```
-project = findmypk-us-west1
-instance = findmypk
+project = yourGCProject
+instance = yourBTInstance
 ```
 and use `cbt` (see [Quickstart](https://cloud.google.com/bigtable/docs/quickstart-cbt) to create a BigTable `report` with a column family `report`:
 ```
@@ -242,6 +242,11 @@ cbt createfamily report report
 cbt ls
 cbt ls report
 cat ~/.cbtrc
+```
+add `project` and `instance` to `conf/fmpk.conf`
+```
+        "bigtableProject": "yourGCProject",
+        "bigtableInstance": "yourBTInstance"
 ```
 2. Getting your SSL Certs (for `example.com`) into `backend` package
 3. Set up a DNS entry (`findmypk.example.com`) that matches and running `bin/findmypk`

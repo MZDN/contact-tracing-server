@@ -16,16 +16,16 @@ import (
 const (
 	version        = "0.1"
 	configFileName = "fmpk.conf"
-	defaultTmpDir  = "/tmp"
+	defaultFMPKDir = "/tmp"
 )
 
 func main() {
-	tmpdir := os.Getenv("TMPDIR")
-	if tmpdir == "" {
-		tmpdir = defaultTmpDir
+	fmpkdir := os.Getenv("FMPKDIR")
+	if fmpkdir == "" {
+		fmpkdir = defaultFMPKDir
 	}
 
-	confFile := filepath.Join(tmpdir, configFileName)
+	confFile := filepath.Join(fmpkdir, configFileName)
 	conf, err := loadConfig(confFile)
 	if err != nil {
 		log.Printf("Err - loadConfig: %v\n", err)
