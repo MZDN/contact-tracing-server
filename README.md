@@ -44,8 +44,8 @@ Contributions sought on:
    * Generate an ephemeral public, private key pair `(pk, sk)`
 On iOS it is not possible to tell how often the MAC address changes, so the best we can do is rotate this key faster than the MAC rotation. [Reference](https://petsymposium.org/2019/files/papers/issue3/popets-2019-0036.pdf)
 
-2. Broadcast `pk, sig, m` over Low Energy Bluetooth
-
+2. Broadcast `prefix, pk, sig, m` over Low Energy Bluetooth
+    * The prefix (3 bytes) indicates the size of pkSize=prefix[0], sigSize=prefix[1], mSize=prefix[2], each represented by 1 byte.
     * The public key `pk` acts like a random, untraceable, contact event number.
     * The sig is over `m` which may or may not reveal symptoms, diseases, and health authority certification.
 
@@ -59,26 +59,24 @@ where each u8 is the number of bytes for the attribute immediately following it.
 1. Record all observed public keys `(pk,sig,memo)` (after Signature verification) as they are observed and store them for at least two weeks  
 
 2. In the event that an individual develop symptoms for CoVID 19 or has a positive test
+
 a. Construct a message “m” using this protobuf:
 ```
 message FindMyPKMemo {
-  enum ReportType {
-   SELF_REPORTED       = 0;
-   CERTIFIED_INFECTION = 1;
-  }
-  ReportType     reportType = 1;
-  int32 diseaseID = 2; // 0=Healthy, 1=Unhealthy/Unknown, 2= COVID-19
-  repeated int32 symptomID = 3;  
-  // Could be used with no key rotation while someone is quarantined
-  bytes publicHealthAuthorityPublicKey = 4;
-  bytes signature = 5;  
+    enum ReportType {
+        SELF_REPORTED       = 0;
+        CERTIFIED_INFECTION = 1;
+      }
+    ReportType     reportType = 1;
+    int32          diseaseID = 2; //0=Healthy, 1=Unhealthy/Unknown, 2= COVID-19
+    repeated int32 symptomID = 3;
 }
 ```
-b. Encrypt the message `m`:
+b. Encrypt the message `m` as byte:
 
 * Generate an ephemeral public key `pk_b`
 * Combine `pk_b` with `pk_a` using Diffie-Hellman to produce a session secret (`ss`)
-* Encrypt the message using AES_GCM
+* Encrypt the message `m` using AES_GCM
 Ciphertext = IV, EncMsg, MAC = AES_GCM(ss, m)
 
 Upload a vector of tuples `[]((H(pk_a), pk_b, AES_GCM(DH(pk_a, pk_b), m))`
