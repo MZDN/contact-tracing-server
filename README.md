@@ -246,8 +246,8 @@ cat ~/.cbtrc
 ```
 add `project` and `instance` to `conf/fmpk.conf`
 ```
-        "bigtableProject": "us-west1-wlk",
-        "bigtableInstance": "findmypk"
+        "bigtableProject": "yourGCProject",
+        "bigtableInstance": "yourBTInstance"
 ```
 2. Getting your SSL Certs (for `example.com`) into `backend` package
 3. Set up a DNS entry (`findmypk.example.com`) that matches and running `bin/findmypk`
