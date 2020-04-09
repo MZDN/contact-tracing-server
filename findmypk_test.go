@@ -16,9 +16,7 @@ import (
 	"github.com/wolkdb/findmypk-server/server"
 )
 
-const endpoint = "covidwatch.wolk.com"
-
-//const endpoint = "d1.wolk.com:8080"
+const endpoint = "api.wolk.com"
 
 // DefaultTransport contains all HTTP client operation parameters
 var DefaultTransport http.RoundTripper = &http.Transport{
@@ -92,6 +90,8 @@ func TestFMPKSimple(t *testing.T) {
 	if err != nil {
 	}
 	localendpoint := fmt.Sprintf("%s.wolk.com:%s", hostname, server.DefaultPort)
+	localendpoint = endpoint
+	timestamp := time.Now().Unix()
 
 	var reports []backend.FMReport
 	var hashKeys [][]byte
@@ -114,13 +114,19 @@ func TestFMPKSimple(t *testing.T) {
 	var prefixHashedKey []byte
 	sampleKey := hashKeys[3]
 	sampleKey2 := hashKeys[6]
-	prefixHashedKey = append(prefixHashedKey, sampleKey[0])
-	prefixHashedKey = append(prefixHashedKey, sampleKey[1])
-	prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
-	prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
-	prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+	prefixSampleKey := sampleKey[:3]
+	prefixSampleKey2 := sampleKey2[:3]
+	prefixHashedKey = append(prefixHashedKey, prefixSampleKey...)
+	prefixHashedKey = append(prefixHashedKey, prefixSampleKey2...)
+	/*
+	   prefixHashedKey = append(prefixHashedKey, sampleKey[0])
+	   prefixHashedKey = append(prefixHashedKey, sampleKey[1])
+	   prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
+	   prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
+	   prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+	*/
 
-	result, err := httppost(fmt.Sprintf("https://%s/%s/%d", localendpoint, server.EndpointFMQuery, time.Now().Unix()), prefixHashedKey)
+	result, err := httppost(fmt.Sprintf("https://%s/%s/%d", localendpoint, server.EndpointFMQuery, timestamp), prefixHashedKey)
 	if err != nil {
 		t.Fatalf("EndpointFMReport: %s", err)
 	}
@@ -170,14 +176,20 @@ func TestFMPKLong(t *testing.T) {
 		var prefixHashedKey []byte
 		sampleKey := hashKeys[rand.Intn(100)]
 		sampleKey2 := hashKeys[rand.Intn(100)]
-		prefixHashedKey = append(prefixHashedKey, sampleKey[0])
-		prefixHashedKey = append(prefixHashedKey, sampleKey[1])
-		prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
-		prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
-		prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+		/*
+		   prefixHashedKey = append(prefixHashedKey, sampleKey[0])
+		   prefixHashedKey = append(prefixHashedKey, sampleKey[1])
+		   prefixHashedKey = append(prefixHashedKey, (sampleKey[2]&0xC0)|(sampleKey2[0]&0xFC>>2))
+		   prefixHashedKey = append(prefixHashedKey, (sampleKey2[0]&03<<6)|(sampleKey2[1]&0xFC>>2))
+		   prefixHashedKey = append(prefixHashedKey, (sampleKey2[1]&03<<6)|(sampleKey2[2]&0xFC>>2))
+		*/
+		prefixSampleKey := sampleKey[:3]
+		prefixSampleKey2 := sampleKey2[:3]
+		prefixHashedKey = append(prefixHashedKey, prefixSampleKey...)
+		prefixHashedKey = append(prefixHashedKey, prefixSampleKey2...)
 
 		queryTimeStart := time.Now()
-		result, err := httppost(fmt.Sprintf("https://%s/%s/%d", endpoint, server.EndpointFMQuery, time.Now().Unix()), prefixHashedKey)
+		result, err := httppost(fmt.Sprintf("https://%s/%s/%d", endpoint, server.EndpointFMQuery, timeStart.Unix()), prefixHashedKey)
 		fmt.Printf("query %d time %v\n", queryNum, time.Since(queryTimeStart))
 		if err != nil {
 			t.Fatalf("EndpointFMReport: %s", err)

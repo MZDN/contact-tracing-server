@@ -25,8 +25,8 @@ func NewBackend(conf *Config) (backend *Backend, err error) {
 		log.Printf("bigtable err %v\n", err)
 		return backend, err
 	}
-	backend.columnFamilyName = "FMReport"
-	backend.tableName = "FMReport"
+	backend.columnFamilyName = "report"
+	backend.tableName = "report"
 	backend.client = client
 	return backend, nil
 }
