@@ -31,6 +31,8 @@ const (
 
 	// EndpointFMQuery is the name of the HTTP endpoint for GET FMKeys
 	EndpointFMQuery = "query"
+
+	EndpointFMSync = "sync"
 )
 
 // Server manages HTTP connections
@@ -45,13 +47,6 @@ func NewServer(httpPort string, backend *backend.Backend) (s *Server, err error)
 	s = &Server{
 		HTTPPort: httpPort,
 	}
-	/*
-		backend, err := backend.NewBackend(connString)
-		if err != nil {
-			log.Printf("backend error %v", err)
-			return s, err
-		}
-	*/
 	s.backend = backend
 
 	mux := http.NewServeMux()
@@ -73,6 +68,12 @@ func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 	} else if strings.Contains(r.URL.Path, EndpointFMQuery) {
 		if r.Method == http.MethodPost {
 			s.postQueryHander(w, r)
+		} else {
+			s.homeHandler(w, r)
+		}
+	} else if strings.Contains(r.URL.Path, EndpointFMSync) {
+		if r.Method == http.MethodGet {
+			//s.getSyncHander(w, r)
 		} else {
 			s.homeHandler(w, r)
 		}
@@ -194,3 +195,28 @@ func (s *Server) postQueryHander(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write(jsonReports)
 }
+
+/*
+//POST /sync?since=timestamp
+func (s *Server) getSyncHander(w http.ResponseWriter, r *http.Request) {
+	str := r.URL.Query().Get("since")
+	if str != nil{
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	timestamp, err := strconv.ParseInt(str, 10, 64)
+	if err != nil{
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if timestamp > time.Now().Unix(){
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	repports, err := s.backend.ProcessSync(timestamp)
+	if err != nil{
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write(jsonReports)
+}
+*/
