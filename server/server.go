@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wolkdb/findmypk-server/backend"
+	"github.com/wolkdb/contact-tracing-server/backend"
 )
 
 const (

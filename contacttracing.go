@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wolkdb/findmypk-server/backend"
-	"github.com/wolkdb/findmypk-server/server"
+	"github.com/wolkdb/contact-tracing-server/backend"
+	"github.com/wolkdb/contact-tracing-server/server"
 )
 
 const (
