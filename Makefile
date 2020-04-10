@@ -31,6 +31,7 @@ deleteservices:
 
 createpods:
 	kubectl apply -f ./build/yaml/deploy.yaml
+	kubectl apply -f ./build/yaml/autoscale.yaml
 
 getpods:
 	kubectl get pods
@@ -38,7 +39,11 @@ getpods:
 getpod:
 	kubectl describe pod findmypk
 
+gethpa:
+	kubectl get hpa findmypk
+
 deletepods:
+	- kubectl delete hpa findmypk
 	kubectl delete deployment findmypk
 
 restartpod:
