@@ -1,19 +1,8 @@
 apiVersion: autoscaling/v1
 kind: HorizontalPodAutoscaler
 metadata:
-  annotations:
-    autoscaling.alpha.kubernetes.io/conditions: '[{"type":"AbleToScale","status":"True","lastTransitionTime":"2020-04-10T16:38:01Z","reason":"ReadyForNewScale","message":"recommended
-      size matches current size"},{"type":"ScalingActive","status":"True","lastTransitionTime":"2020-04-10T16:38:16Z","reason":"ValidMetricFound","message":"the
-      HPA was able to successfully calculate a replica count from cpu resource utilization
-      (percentage of request)"},{"type":"ScalingLimited","status":"True","lastTransitionTime":"2020-04-10T16:38:16Z","reason":"TooFewReplicas","message":"the
-      desired replica count is more than the maximum replica count"}]'
-    autoscaling.alpha.kubernetes.io/current-metrics: '[{"type":"Resource","resource":{"name":"cpu","currentAverageUtilization":1,"currentAverageValue":"1m"}}]'
-  creationTimestamp: "2020-04-10T16:37:46Z"
   name: findmypk
   namespace: default
-  resourceVersion: "1239676"
-  selfLink: /apis/autoscaling/v1/namespaces/default/horizontalpodautoscalers/findmypk
-  uid: 9bb73aa8-7b49-11ea-a709-42010a8a011e
 spec:
   maxReplicas: 6
   minReplicas: 4
