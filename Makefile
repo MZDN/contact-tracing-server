@@ -2,14 +2,15 @@
 
 GOBIN = $(shell pwd)/bin
 GO ?= latest
+DEV=mm
 
 findmypk:
-		go build -o bin/findmypk
-		@echo "Done building FindMyPk!  Run \"$(GOBIN)/findmypk\" to launch findmypk."
+	go build -o bin/findmypk
+	@echo "Done building FindMyPk!  Run \"$(GOBIN)/findmypk\" to launch findmypk."
 
 docker:
-	docker build --force-rm -t gcr.io/us-west1-wlk/wolkinc/findmypk-mm .
-	gcloud docker -- push gcr.io/us-west1-wlk/wolkinc/findmypk-mm:latest
+	docker build --force-rm -t gcr.io/us-west1-wlk/wolkinc/findmypk-$(DEV) .
+	gcloud docker -- push gcr.io/us-west1-wlk/wolkinc/findmypk-$(DEV):latest
 
 createpvcs:
 	kubectl apply -f ./build/yaml/pvc.yaml
@@ -31,6 +32,7 @@ deleteservices:
 
 createpods:
 	kubectl apply -f ./build/yaml/deploy.yaml
+	kubectl autoscale findmypk --max 6 --min 3 --cpu-percent 50
 
 getpods:
 	kubectl get pods
