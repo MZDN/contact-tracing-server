@@ -47,7 +47,7 @@ func TestEncryption(t *testing.T) {
 	fmt.Printf("Decrypted:%v len(RawMsg)=%d, len(EncMsg)=%d\n", string(decrypted), len(msg), len(encrypted))
 }
 
-func TestFMReport(t *testing.T) {
+func TestCTReport(t *testing.T) {
 
 	fmt.Printf("--ECC Parameters--\n")
 	fmt.Printf(" Name: %s\n", elliptic.P256().Params().Name)
@@ -106,14 +106,14 @@ func TestFMReport(t *testing.T) {
 	}
 	fmt.Printf("\nA Verified msgB: DecryptedCiphertextB=[%x](%d)\n", DecryptedCiphertextB, int64(binary.LittleEndian.Uint64(DecryptedCiphertextB)))
 
-	//Step2 - Encryption. A is sick and computes EncodedMsg following a protobuf serialization scheme within a FMReport R using (1b)'s PK_B(t)
-	memoS := &FindMyPKMemo{ReportType: 1, DiseaseID: 2, SymptomID: []int32{5, 7, 123}}
+	//Step2 - Encryption. A is sick and computes EncodedMsg following a protobuf serialization scheme within a CTReport R using (1b)'s PK_B(t)
+	memoS := &ContactTracingMemo{ReportType: 1, DiseaseID: 2, SymptomID: []int32{5, 7, 123}}
 	memoByteS, err := proto.Marshal(memoS)
 	if err != nil {
 		log.Fatal("marshaling error: ", err)
 	}
 	fmt.Printf("\nA Made report for B(pub=%x)\nencoded memo:%x\n", FromECDSAPub(sPub), memoByteS)
-	report, err := MakeFMReport(rPub, sPriv, memoByteS)
+	report, err := MakeCTReport(rPub, sPriv, memoByteS)
 	if err != nil {
 		panic(err)
 	}
@@ -123,10 +123,10 @@ func TestFMReport(t *testing.T) {
 	}
 	fmt.Printf("\nA submitted report for B: %v\n", string(r))
 
-	//A's report, which is included in reports []FMReport sent to ProcessReport
-	//TODO: backend.ProcessReport([]FMReport{report})
+	//A's report, which is included in reports []CTReport sent to ProcessReport
+	//TODO: backend.ProcessReport([]CTReport{report})
 
-	//Step3.a - Decryption. B queries a report by hitting ProcessQuery(query []byte, timestamp uint64) and getting back reports []FMReport one of which contains R of Step2
+	//Step3.a - Decryption. B queries a report by hitting ProcessQuery(query []byte, timestamp uint64) and getting back reports []CTReport one of which contains R of Step2
 	//TODO: backend.ProcessQuery(query []byte, timestamp uint64)
 
 	//Step3.b - B filter query with seen map[hashedPk](pub,rss).
@@ -135,11 +135,11 @@ func TestFMReport(t *testing.T) {
 	//Step3.c - B Then uses recipient session secret generate by (1a)'s PK_A(t) to decode to the memo, following a protobuf deserialization scheme
 	fmt.Printf("\nB decrypting report from A using session secret(rss=%x)\n", rss[:])
 
-	dmemoByteS, err := DecryptFMReport(report, rss[:])
+	dmemoByteS, err := DecryptCTReport(report, rss[:])
 	if err != nil {
 		panic(err)
 	}
-	vMemoS := &FindMyPKMemo{}
+	vMemoS := &ContactTracingMemo{}
 	err = proto.Unmarshal(dmemoByteS, vMemoS)
 	if err != nil {
 		log.Fatal("unmarshaling error: ", err)

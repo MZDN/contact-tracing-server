@@ -23,14 +23,16 @@ const (
 	sslKeyFileName = "www.wolk.com.key"
 	caFileName     = "www.wolk.com.bundle"
 
-	// DefaultPort is the port which the FindMyPk HTTP server is listening in on
+	// DefaultPort is the port which the Contact Tracing  HTTP server is listening in on
 	DefaultPort = "8080"
 
-	// EndpointFMReport is the name of the HTTP endpoint for GET/POST of FMReport
-	EndpointFMReport = "report"
+	// EndpointCTReport is the name of the HTTP endpoint for POST of CTReport
+	EndpointCTReport = "report"
 
-	// EndpointFMQuery is the name of the HTTP endpoint for GET FMKeys
-	EndpointFMQuery = "query"
+	// EndpointCTQuery is the name of the HTTP endpoint for POST of query to get reports
+	EndpointCTQuery = "query"
+
+	EndpointCTSync = "sync"
 )
 
 // Server manages HTTP connections
@@ -40,18 +42,11 @@ type Server struct {
 	HTTPPort string
 }
 
-// NewServer returns an HTTP Server to handle simple-api-process-flow https://github.com/Co-Epi/data-models/blob/master/simple-api-process-flow.md
+// NewServer returns an HTTP Server
 func NewServer(httpPort string, backend *backend.Backend) (s *Server, err error) {
 	s = &Server{
 		HTTPPort: httpPort,
 	}
-	/*
-		backend, err := backend.NewBackend(connString)
-		if err != nil {
-			log.Printf("backend error %v", err)
-			return s, err
-		}
-	*/
 	s.backend = backend
 
 	mux := http.NewServeMux()
@@ -64,15 +59,21 @@ func NewServer(httpPort string, backend *backend.Backend) (s *Server, err error)
 func (s *Server) getConnection(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	log.Println("getConnection")
-	if strings.Contains(r.URL.Path, EndpointFMReport) {
+	if strings.Contains(r.URL.Path, EndpointCTReport) {
 		if r.Method == http.MethodPost {
 			s.postReportHander(w, r)
 		} else {
 			s.homeHandler(w, r)
 		}
-	} else if strings.Contains(r.URL.Path, EndpointFMQuery) {
+	} else if strings.Contains(r.URL.Path, EndpointCTQuery) {
 		if r.Method == http.MethodPost {
 			s.postQueryHander(w, r)
+		} else {
+			s.homeHandler(w, r)
+		}
+	} else if strings.Contains(r.URL.Path, EndpointCTSync) {
+		if r.Method == http.MethodGet {
+			s.getSyncHander(w, r)
 		} else {
 			s.homeHandler(w, r)
 		}
@@ -149,8 +150,8 @@ func (s *Server) postReportHander(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	// Parse body as FMReport
-	var payload []backend.FMReport
+	// Parse body as CTReport
+	var payload []backend.CTReport
 	err = json.Unmarshal(body, &payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -173,18 +174,44 @@ func (s *Server) postQueryHander(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body.Close()
 
-	/// need to do error handling
-	pathpieces := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	fmt.Println(pathpieces[0], pathpieces[1], len(pathpieces))
-	if len(pathpieces) != 2 {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	str := r.URL.Query().Get("since")
+	if len(str) == 0 {
+		http.Error(w, "no start time", http.StatusBadRequest)
 		return
 	}
-	timestamp, err := strconv.ParseInt(pathpieces[1], 10, 64)
+
+	timestamp, err := strconv.ParseInt(str, 10, 64)
 	if err != nil {
 		////
 	}
 	reports, err := s.backend.ProcessQuery(body, timestamp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	jsonReports, err := json.Marshal(reports)
+	if err != nil {
+		/////
+	}
+	w.Write(jsonReports)
+}
+
+//POST /sync?since=timestamp
+func (s *Server) getSyncHander(w http.ResponseWriter, r *http.Request) {
+	str := r.URL.Query().Get("since")
+	if len(str) == 0 {
+		http.Error(w, "no start time", http.StatusBadRequest)
+		return
+	}
+	timestamp, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if timestamp > time.Now().Unix() {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	reports, err := s.backend.ProcessSync(timestamp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}

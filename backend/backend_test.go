@@ -18,7 +18,7 @@ func TestBackendReportQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var reports []FMReport
+	var reports []CTReport
 	var hashKeys [][]byte
 	for i := 0; i < 10; i++ {
 		key := make([]byte, 16)
@@ -27,7 +27,7 @@ func TestBackendReportQuery(t *testing.T) {
 		hashKeys = append(hashKeys, hashKey)
 		symptom := "sample symptom"
 
-		report := FMReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
+		report := CTReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
 		reports = append(reports, report)
 	}
 	err = backend.ProcessReport(reports)
@@ -45,7 +45,7 @@ func TestBackendReportQuery(t *testing.T) {
 		hashKeys = append(hashKeys, hashKey)
 		symptom := "sample symptom"
 
-		report := FMReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
+		report := CTReport{HashedPK: hashKey, EncodedMsg: []byte(symptom)}
 		reports = append(reports, report)
 	}
 	err = backend.ProcessReport(reports)
@@ -71,12 +71,12 @@ func TestBackendReportQuery(t *testing.T) {
 
 /*
 func TestBackendSimple(t *testing.T) {
-	fmReport, fmReportKeys := GetSampleFMReportAndFMKeys(2)
+	fmReport, fmReportKeys := GetSampleCTReportAndFMKeys(2)
 	fmReportJSON, err := json.Marshal(fmReport)
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
-	fmt.Printf("FMReportJSON Sample: %s\n", fmReportJSON)
+	fmt.Printf("CTReportJSON Sample: %s\n", fmReportJSON)
 
 	for i, fmReportKey := range fmReportKeys {
 		fmt.Printf("FMKey %d: %s\n", i, fmReportKey)
@@ -88,9 +88,9 @@ func TestBackendSimple(t *testing.T) {
 	}
 
 	// submit FM Report
-	err = backend.ProcessFMReport(fmReport)
+	err = backend.ProcessCTReport(fmReport)
 	if err != nil {
-		t.Fatalf("ProcessFMReport: %s", err)
+		t.Fatalf("ProcessCTReport: %s", err)
 	}
 
 	// get recent FMKeys (last 10 seconds)
@@ -120,18 +120,18 @@ func TestBackendSimple(t *testing.T) {
 			t.Fatalf("ProcessGetFMKeys key 0 in report [%s] not found", fmReportKeys[0])
 		}
 		fmKey := fmKeys[i]
-		reports, err := backend.ProcessGetFMReport(fmKey)
+		reports, err := backend.ProcessGetCTReport(fmKey)
 		if err != nil {
-			t.Fatalf("ProcessGetFMReport: %s", err)
+			t.Fatalf("ProcessGetCTReport: %s", err)
 		}
 		if len(reports) > 0 {
 			report := reports[0]
 			if !bytes.Equal(report.Report, fmReport.Report) {
-				t.Fatalf("ProcessGetFMReport Report Mismatch: expected %s, got [%s]", report.Report, fmReport.Report)
+				t.Fatalf("ProcessGetCTReport Report Mismatch: expected %s, got [%s]", report.Report, fmReport.Report)
 			}
-			fmt.Printf("ProcessGetFMReport SUCCESS (%s): [%s]\n", fmKey, report.Report)
+			fmt.Printf("ProcessGetCTReport SUCCESS (%s): [%s]\n", fmKey, report.Report)
 		} else {
-			t.Fatalf("ProcessGetFMReport: Report not found for fmKey %s\n", fmKey)
+			t.Fatalf("ProcessGetCTReport: Report not found for fmKey %s\n", fmKey)
 		}
 	}
 

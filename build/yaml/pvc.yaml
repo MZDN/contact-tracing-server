@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: findmypk
+  name: contact-tracing
 spec:
   accessModes:
     - ReadWriteOnce

@@ -1,10 +1,10 @@
 FROM google/cloud-sdk:latest
-Add . /go/src/findmypk
-COPY bin/findmypk /
+Add . /go/src/contact-tracing
+COPY bin/contact-tracing /
 COPY certs/www.wolk.com.key /tmp/
 COPY certs/www.wolk.com.bundle /tmp/
-COPY conf/fmpk.conf /tmp/
+COPY conf/ct.conf /tmp/
 ENV PORT 8080
 ENV SSLDIR /tmp
-ENV FMPKDIR /tmp
-CMD ["./findmypk"]
+ENV CTDIR /tmp
+CMD ["./contact-tracing"]

@@ -1,7 +1,7 @@
 package backend
 
-// FMReport payload is sent by client to /fmreport when user reports symptoms
-type FMReport struct {
+// CTReport payload is sent by client to /fmreport when user reports symptoms
+type CTReport struct {
 	HashedPK   []byte `json:"hashedPK"`
 	EncodedMsg []byte `json:"encodedMsg"`
 }

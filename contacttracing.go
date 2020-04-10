@@ -15,17 +15,17 @@ import (
 
 const (
 	version        = "0.1"
-	configFileName = "fmpk.conf"
-	defaultFMPKDir = "/tmp"
+	configFileName = "ct.conf"
+	defaultCTDir   = "/tmp"
 )
 
 func main() {
-	fmpkdir := os.Getenv("FMPKDIR")
-	if fmpkdir == "" {
-		fmpkdir = defaultFMPKDir
+	ctdir := os.Getenv("CTDIR")
+	if ctdir == "" {
+		ctdir = defaultCTDir
 	}
 
-	confFile := filepath.Join(fmpkdir, configFileName)
+	confFile := filepath.Join(ctdir, configFileName)
 	conf, err := loadConfig(confFile)
 	if err != nil {
 		log.Printf("Err - loadConfig: %v\n", err)
@@ -37,24 +37,16 @@ func main() {
 		port = server.DefaultPort
 	}
 
-	findMyPkBackend, err := backend.NewBackend(conf)
+	backend, err := backend.NewBackend(conf)
 	if err != nil {
 	}
-	/*
-		mysqlconn := os.Getenv("MYSQLCONN")
-		if mysqlconn == "" {
-			mysqlconn = conf.MysqlConn
-		}
-		mysqlConnectionString := flag.String("conn", mysqlconn, "MySQL Connection String")
-	*/
-
-	//s, err := server.NewServer(port, *mysqlConnectionString)
-	s, err := server.NewServer(port, findMyPkBackend)
+	//backend.Start()
+	s, err := server.NewServer(port, backend)
 	if err != nil {
 		panic(err)
 	}
 	s.Start()
-	log.Printf("FindMyPk Server v%s - Listening on port %s...\n", version, port)
+	log.Printf("Contact Tracing Server v%s - Listening on port %s...\n", version, port)
 	for {
 	}
 }

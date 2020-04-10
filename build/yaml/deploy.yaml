@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: findmypk
+  name: contact-tracing
   labels:
-    app: findmypk
+    app: contact-tracing
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: findmypk
+      app: contact-tracing
   template:
     metadata:
       labels:
-        app: findmypk
+        app: contact-tracing
     spec:
       containers:
-      - name: findmypk
-        image: gcr.io/us-west1-wlk/wolkinc/findmypk-mm:latest
+      - name: contact-tracing
+        image: gcr.io/us-west1-wlk/wolkinc/contact-tracing:latest
         ports:
         - containerPort: 8080
